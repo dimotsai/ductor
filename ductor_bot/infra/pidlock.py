@@ -26,6 +26,11 @@ def _is_process_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
+    except OSError as e:
+        # Windows: [WinError 87] The parameter is incorrect usually means PID not found
+        if getattr(e, "winerror", 0) == 87:
+            return False
+        return True
     return True
 
 

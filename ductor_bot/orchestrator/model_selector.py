@@ -71,6 +71,7 @@ async def model_selector_start(
             [
                 InlineKeyboardButton(text="CLAUDE", callback_data="ms:p:claude"),
                 InlineKeyboardButton(text="CODEX", callback_data="ms:p:codex"),
+                InlineKeyboardButton(text="GEMINI", callback_data="ms:p:gemini"),
             ]
         ]
     )
@@ -203,8 +204,30 @@ async def _build_model_step(
         )
         return f"{header}\n\nSelect Claude model:", keyboard
 
+    if provider == "gemini":
+        from ductor_bot.config import _GEMINI_MODELS
+        
+        # Sort reasonably, maybe put pro first?
+        models = sorted(list(_GEMINI_MODELS), reverse=True)
+        # Split into rows if too many
+        rows = []
+        current_row = []
+        for m in models:
+            current_row.append(InlineKeyboardButton(text=m, callback_data=f"ms:m:{m}"))
+            if len(current_row) >= 2:
+                rows.append(current_row)
+                current_row = []
+        if current_row:
+            rows.append(current_row)
+            
+        rows.append([InlineKeyboardButton(text="<< Back", callback_data="ms:b:root")])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+        return f"{header}\n\nSelect Gemini model:", keyboard
+
     # Use cache instead of live discovery
     codex_models = codex_cache.models if codex_cache else []
+
     if not codex_models:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -233,6 +256,10 @@ async def _handle_model_selected(
     provider = orch._models.provider_for(model_id)
 
     if provider == "claude":
+        result = await switch_model(orch, chat_id, model_id)
+        return result, None
+
+    if provider == "gemini":
         result = await switch_model(orch, chat_id, model_id)
         return result, None
 
