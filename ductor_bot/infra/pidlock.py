@@ -20,8 +20,26 @@ _IS_WINDOWS = sys.platform == "win32"
 
 def _is_process_alive(pid: int) -> bool:
     """Check if a process with the given PID is still running."""
+    import subprocess
+
     try:
         os.kill(pid, 0)
+        
+        # On Windows, os.kill(pid, 0) can sometimes return True for zombie or ghost processes.
+        # Verify it's actually a python process.
+        if _IS_WINDOWS:
+            try:
+                output = subprocess.check_output(
+                    ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                return "python" in output.lower()
+            except Exception:
+                # If tasklist fails, fall back to the os.kill result
+                return True
+                
+        return True
     except ProcessLookupError:
         return False
     except PermissionError:

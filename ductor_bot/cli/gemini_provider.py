@@ -16,6 +16,7 @@ from typing import Any
 
 from ductor_bot.cli.base import BaseCLI, CLIConfig, docker_wrap
 from ductor_bot.cli.stream_events import (
+    AssistantTextDelta,
     ResultEvent,
     StreamEvent,
     SystemInitEvent,
@@ -90,6 +91,7 @@ class GeminiCLI(BaseCLI):
         """Prepare environment variables for the Gemini CLI subprocess."""
         env = os.environ.copy()
         env["ANTIGRAVITY_IDE_ENABLED"] = "false"
+        env["ANTIGRAVITY_IDE_DANGEROUS_YOLO_MODE"] = "true"
         env["GEMINI_IDE_ENABLED"] = "false"
         if system_prompt_path:
             env["GEMINI_SYSTEM_MD"] = system_prompt_path
@@ -100,7 +102,7 @@ class GeminiCLI(BaseCLI):
         """Managed temporary file for the system prompt with Windows safety rules."""
         sys_p = self._config.system_prompt or ""
         app_p = self._config.append_system_prompt or ""
-        
+
         # Mandatory instructions to avoid interactive hangs on Windows.
         safety_p = (
             "\n\n## Windows Safety Rules\n"
@@ -175,8 +177,8 @@ class GeminiCLI(BaseCLI):
             while turn < max_turns:
                 turn += 1
                 cmd = self._build_command(
-                    resume_session=current_resume, 
-                    continue_session=continue_session, 
+                    resume_session=current_resume,
+                    continue_session=continue_session,
                     streaming=True
                 )
                 _log_cmd(cmd, streaming=True)
@@ -184,7 +186,7 @@ class GeminiCLI(BaseCLI):
                 exec_cmd, use_cwd = docker_wrap(
                     cmd, self._config.docker_container, self._config.chat_id, self._working_dir
                 )
-                
+
                 # Clear pending tools for the new turn
                 state.pending_tools = []
                 async for event in self._run_streaming_turn(exec_cmd, use_cwd, env, state, current_prompt, timeout_seconds):
@@ -253,7 +255,7 @@ class GeminiCLI(BaseCLI):
 
         turn_requested_tools: dict[str, dict[str, Any]] = {}
         turn_completed_tool_ids: set[str] = set()
-        
+
         # Tools we ALWAYS want to run manually to ensure Windows optimizations
         OVERRIDE_TOOLS = {"ask_user", "run_shell_command", "google_web_search", "google_search", "transcribe_audio"}
 
@@ -270,7 +272,7 @@ class GeminiCLI(BaseCLI):
                     logger.info("Gemini raw line: %s", line)
                     if not line.startswith("{"):
                         if not seen_new:
-                            yield StreamEvent(type="message", content=line + "\n", role="assistant")
+                            yield AssistantTextDelta(type="assistant", text=line + "\n")
                         continue
 
                     for event in parse_stream_line(line, last_session_id=state.session_id):
@@ -279,10 +281,19 @@ class GeminiCLI(BaseCLI):
 
                         if event.type in ("system", "init"):
                             continue
-                        
+
+                        # Handle ResultEvent early to capture quota errors etc.
+                        if isinstance(event, ResultEvent):
+                            state.add_usage(event.usage)
+                            if event.is_error:
+                                state.error_occurred = True
+                                yield event
+                                return
+                            continue
+
                         if event.delta or isinstance(event, ToolUseEvent) or (event.type == "assistant" and getattr(event, "text", "")):
                             seen_new = True
-                        
+
                         if not seen_new:
                             continue
 
@@ -302,14 +313,6 @@ class GeminiCLI(BaseCLI):
                                     turn_completed_tool_ids.add(tid)
                             continue
 
-                        if isinstance(event, ResultEvent):
-                            state.add_usage(event.usage)
-                            if event.is_error and not seen_new:
-                                state.error_occurred = True
-                                yield event
-                                return
-                            continue
-
                         yield event
 
         except TimeoutError:
@@ -322,7 +325,7 @@ class GeminiCLI(BaseCLI):
             stderr_bytes = await stderr_task
             await process.wait()
             logger.info("CLI turn finished in %.2fs (exit=%d)", time.time() - start_t, process.returncode)
-            
+
             # Identify tools that need manual fallback or override
             manual_tools = [t for tid, t in turn_requested_tools.items() if tid not in turn_completed_tool_ids]
             for t in manual_tools:

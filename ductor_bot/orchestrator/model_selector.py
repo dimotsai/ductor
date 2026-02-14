@@ -205,15 +205,35 @@ async def _build_model_step(
         return f"{header}\n\nSelect Claude model:", keyboard
 
     if provider == "gemini":
-        from ductor_bot.config import _GEMINI_MODELS
+        # Group 1: Auto & Aliases
+        aliases = ["auto", "auto-2.5", "pro", "flash", "flash-lite"]
+        # Group 2: Specific versions
+        specific = [
+            "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+        ]
         
-        # Sort reasonably, maybe put pro first?
-        models = sorted(list(_GEMINI_MODELS), reverse=True)
-        # Split into rows if too many
         rows = []
+        # Add aliases in rows of 2 or 3
         current_row = []
-        for m in models:
-            current_row.append(InlineKeyboardButton(text=m, callback_data=f"ms:m:{m}"))
+        for m in aliases:
+            current_row.append(InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}"))
+            if len(current_row) >= 3:
+                rows.append(current_row)
+                current_row = []
+        if current_row:
+            rows.append(current_row)
+            
+        # Add specific versions in rows of 2
+        current_row = []
+        for m in specific:
+            # Shorten names for buttons if possible, or just keep them
+            label = m.replace("gemini-", "")
+            current_row.append(InlineKeyboardButton(text=label, callback_data=f"ms:m:{m}"))
             if len(current_row) >= 2:
                 rows.append(current_row)
                 current_row = []

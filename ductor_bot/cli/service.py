@@ -55,7 +55,27 @@ class _StreamCallbacks:
         if isinstance(event, ThinkingEvent) and self._on_status is not None:
             await self._on_status("thinking")
         elif isinstance(event, ToolUseEvent) and self._on_tool is not None:
-            await self._on_tool(event.tool_name)
+            # Extract a human-readable description of what the tool is doing.
+            name = event.tool_name
+            args = event.arguments
+            desc = args.get("description")
+
+            if not desc:
+                if name in ("read_file", "read_document", "read_document_pos"):
+                    desc = args.get("path") or args.get("file_path")
+                elif name in ("list_directory", "list_files", "ls"):
+                    desc = args.get("dir_path") or args.get("path")
+                elif name == "run_shell_command":
+                    desc = args.get("command") or args.get("cmd")
+                elif name == "google_web_search":
+                    desc = args.get("query")
+                elif name == "web_fetch":
+                    desc = args.get("url")
+
+            if desc:
+                await self._on_tool(f"{name}|{desc}")
+            else:
+                await self._on_tool(name)
         elif isinstance(event, SystemStatusEvent) and self._on_status is not None:
             await self._on_status(event.status)
         elif isinstance(event, CompactBoundaryEvent):

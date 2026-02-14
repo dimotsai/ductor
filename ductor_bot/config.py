@@ -205,9 +205,15 @@ def resolve_user_timezone(configured: str = "") -> ZoneInfo:
 _CLAUDE_MODELS: frozenset[str] = frozenset({"haiku", "sonnet", "opus"})
 _GEMINI_MODELS: frozenset[str] = frozenset(
     {
-        "gemini-3-pro",
+        "auto",
+        "auto-2.5",
+        "pro",
+        "flash",
+        "flash-lite",
         "gemini-3-pro-preview",
-        "gemini-2.0-flash-exp",
+        "gemini-3-flash-preview",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
         "gemini-1.5-pro",
         "gemini-1.5-flash",
     }
@@ -270,7 +276,7 @@ class ModelRegistry:
         if fallback_provider:
             fallback_model = "opus" if fallback_provider == "claude" else model_name
             if fallback_provider == "gemini":
-                fallback_model = "gemini-1.5-pro"
+                fallback_model = "auto"
             logger.warning(
                 "No equivalent for '%s', falling back to %s (%s)",
                 model_name,

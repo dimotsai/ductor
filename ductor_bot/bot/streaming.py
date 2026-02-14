@@ -39,52 +39,17 @@ class StreamEditorProtocol(Protocol):
     @property
     def has_content(self) -> bool: ...
     async def append_text(self, text: str) -> None: ...
-    async def append_tool(self, tool_name: str) -> None: ...
-    async def append_system(self, text: str) -> None: ...
-    async def finalize(self, full_text: str) -> None: ...
-
-
-class StreamEditor:
-    """Append-mode stream editor: each chunk is a new formatted message.
-
-    - ``append_text(chunk)`` -> ``markdown_to_telegram_html`` -> ``send_message``
-    - ``append_tool(name)`` -> send tool indicator as new message
-    - ``finalize()`` -> no-op (everything already sent)
-
-    The first message replies to the original user message (``reply_to``),
-    all subsequent messages are sent standalone.
-    """
-
-    def __init__(
-        self,
-        bot: Bot,
-        chat_id: int,
-        *,
-        reply_to: Message | None = None,
-    ) -> None:
-        self._bot = bot
-        self._chat_id = chat_id
-        self._reply_to = reply_to
-        self._messages_sent = 0
-        self._last_msg: Message | None = None
-
-    @property
-    def has_content(self) -> bool:
-        """True if at least one message has been sent."""
-        return self._messages_sent > 0
-
-    async def append_text(self, text: str) -> None:
-        """Format chunk as HTML and send as new message."""
-        if not text.strip():
-            return
-        formatted = markdown_to_telegram_html(text)
-        chunks = split_html_message(formatted)
-        for chunk in chunks:
-            await self._send(chunk, raw_fallback=text)
-
     async def append_tool(self, tool_name: str) -> None:
         """Send a tool indicator as a new message."""
-        indicator = f"<b>[TOOL: {html.escape(tool_name)}]</b>"
+        name = tool_name
+        desc = None
+        if "|" in tool_name:
+            name, desc = tool_name.split("|", 1)
+
+        if desc:
+            indicator = f"<b>[TOOL: {html.escape(name)}]</b> <i>{html.escape(desc)}</i>"
+        else:
+            indicator = f"<b>[TOOL: {html.escape(name)}]</b>"
         await self._send(indicator)
 
     async def append_system(self, text: str) -> None:

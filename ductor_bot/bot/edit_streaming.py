@@ -37,6 +37,8 @@ class _ToolEntry:
     name: str
     count: int = 1
     style: str = "tool"
+    description: str | None = None
+    description: str | None = None
 
 
 class _ToolTracker:
@@ -61,12 +63,17 @@ class _ToolTracker:
         """Render all entries as Telegram HTML lines."""
         parts: list[str] = []
         for entry in self._entries:
-            escaped = html.escape(entry.name)
+            name_escaped = html.escape(entry.name)
+            desc_escaped = html.escape(entry.description) if entry.description else ""
             suffix = f" x{entry.count}" if entry.count > 1 else ""
+
             if entry.style == "system":
-                parts.append(f"<i>[{escaped}]{suffix}</i>")
+                parts.append(f"<i>[{name_escaped}]{suffix}</i>")
             else:
-                parts.append(f"<b>[TOOL: {escaped}]{suffix}</b>")
+                if desc_escaped:
+                    parts.append(f"<b>[TOOL: {name_escaped}]</b> <i>{desc_escaped}</i>{suffix}")
+                else:
+                    parts.append(f"<b>[TOOL: {name_escaped}]{suffix}</b>")
         return "\n".join(parts)
 
     @property
