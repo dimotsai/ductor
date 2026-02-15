@@ -198,8 +198,29 @@ class GeminiCLI(BaseCLI):
                 # Execute remaining tools (e.g. ask_user or failed internal tools)
                 results = []
                 for call in state.pending_tools:
-                    out = await self._execute_tool(call["name"], call["arguments"])
-                    results.append({"call_id": call["call_id"], "tool_name": call["name"], "output": out})
+                    name = call["name"]
+                    args = call["arguments"]
+
+                    # Permission Guard for Semi-automatic mode
+                    dangerous_tools = {"write_file", "replace", "run_shell_command", "delete_file"}
+                    if name in dangerous_tools and self._config.permission_mode != "bypassPermissions":
+                        # We don't have a way to 'wait' here in the middle of a tool loop 
+                        # without blocking the whole bot. Instead, we fail the tool and 
+                        # tell the AI it MUST ask the user first.
+                        results.append({
+                            "call_id": call["call_id"], 
+                            "tool_name": name, 
+                            "output": (
+                                f"Error: Permission denied for '{name}'. "
+                                "In semi-automatic mode, you MUST use the 'ask_user' tool FIRST "
+                                "to describe exactly what you are going to do and wait for the user to say 'Yes'. "
+                                "Do not attempt this action again until you have received explicit confirmation."
+                            )
+                        })
+                        continue
+
+                    out = await self._execute_tool(name, args)
+                    results.append({"call_id": call["call_id"], "tool_name": name, "output": out})
 
                 current_prompt = self._format_tool_results(results)
                 current_resume = state.session_id
@@ -244,20 +265,25 @@ class GeminiCLI(BaseCLI):
         # Map standard tool names to ductor's script names
         tool_name_map = {
             "read_file": "read_document",
-            "list_directory": "list_files",
+            "list_directory": "list_directory",
             "list_files": "list_files",
             "google_web_search": "google_web_search",
             "google_search": "google_web_search",
             "web_fetch": "web_fetch",
             "run_shell_command": "run_shell_command",
-            "ask_user": "ask_user"
+            "ask_user": "ask_user",
+            "write_file": "write_file",
+            "replace": "replace"
         }
 
         turn_requested_tools: dict[str, dict[str, Any]] = {}
         turn_completed_tool_ids: set[str] = set()
 
-        # Tools we ALWAYS want to run manually to ensure Windows optimizations
-        OVERRIDE_TOOLS = {"ask_user", "run_shell_command", "google_web_search", "google_search", "transcribe_audio"}
+        # Tools we ALWAYS want to run manually to ensure Windows optimizations and permissions
+        OVERRIDE_TOOLS = {
+            "ask_user", "run_shell_command", "google_web_search", 
+            "google_search", "transcribe_audio", "write_file", "replace"
+        }
 
         try:
             async with asyncio.timeout(timeout_seconds or 300.0):
@@ -350,8 +376,25 @@ class GeminiCLI(BaseCLI):
             return f"Error: Tool {name} not found"
 
         cmd = [sys.executable, str(tool_path)]
-        for k, v in arguments.items():
-            cmd += [f"--{k}", str(v)]
+        
+        # Parameter mapping for specific tools
+        mapped_args = arguments.copy()
+        if name == "read_document":
+            # read_document.py expects --file
+            if "file" not in mapped_args:
+                val = mapped_args.pop("file_path", None) or mapped_args.pop("path", None)
+                if val:
+                    mapped_args["file"] = val
+        elif name == "list_files":
+            # list_files.py (the telegram one) doesn't take path, 
+            # but we might want a generic list_directory later.
+            pass
+
+        for k, v in mapped_args.items():
+            if isinstance(v, (list, dict)):
+                cmd += [f"--{k}", json.dumps(v)]
+            else:
+                cmd += [f"--{k}", str(v)]
 
         try:
             process = await asyncio.create_subprocess_exec(

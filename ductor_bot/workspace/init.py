@@ -72,7 +72,21 @@ def _walk_and_copy(src: Path, dst: Path, root_src: Path | None = None) -> None:
     if root_src is None:
         root_src = src
 
-    dst.mkdir(parents=True, exist_ok=True)
+    import os
+    if os.path.lexists(dst):
+        if not dst.is_dir():
+            # Broken link or file in the way of a directory
+            try:
+                if dst.is_symlink():
+                    dst.unlink()
+                else:
+                    os.remove(dst)
+                dst.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                logger.warning("Failed to clean up blocking path: %s", dst)
+    else:
+        dst.mkdir(parents=True, exist_ok=True)
+
     for entry in sorted(src.iterdir()):
         if entry.name.startswith(".") or entry.name in _SKIP_DIRS or entry.name in _SKIP_FILES:
             continue
