@@ -86,8 +86,12 @@ mypy ductor_bot
     - **Forced Tool Overrides:** Critical tools like `run_shell_command`, `google_web_search`, and `ask_user` are forced to manual execution to ensure robust behavior and 60s timeouts.
     - **Automatic Fallback:** If an internal Gemini tool fails, the provider automatically falls back to ductor's manual tool loop in the same turn.
     - **History Filtering:** Automatically detects and discards re-echoed conversation history in `stream-json` mode by tracking the `delta` flag.
-    - **Session Persistence:** Correctly maps `--resume` flags and captures `session_id` from `SystemInitEvent` to maintain conversation context.
-- **Error Handling:** Use the domain-specific exceptions defined in `ductor_bot/errors.py`.
+        -   **Session Persistence:** Correctly maps `--resume` flags and captures `session_id` from `SystemInitEvent` to maintain conversation context.
+    - **Cron Support:** Fully integrated with the in-process scheduler.
+        - **One-shot execution:** Uses `json` output format for reliable result parsing.
+        - **Windows Safety:** Employs the same `stdin` piping technique as the main provider to bypass character limits in scheduled tasks.
+        - **Result Extraction:** Robust parsing of Gemini's JSON response to capture the final agent output for Telegram notifications.
+    - **Error Handling:** Use the domain-specific exceptions defined in `ductor_bot/errors.py`.
 
 ### Workspace Management
 - **_home_defaults:** The `ductor_bot/_home_defaults/` directory contains the template for the user's `~/.ductor/` home.
