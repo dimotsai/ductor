@@ -197,12 +197,26 @@ class GeminiCLI(BaseCLI):
 
                 # Execute remaining tools (e.g. ask_user or failed internal tools)
                 results = []
+                stop_turn = False
                 for call in state.pending_tools:
                     name = call["name"]
                     args = call["arguments"]
 
+                    if name == "ask_user":
+                        # Execute ask_user to get the buttons/question text
+                        out = await self._execute_tool(name, args)
+                        # Yield it to the user immediately
+                        yield AssistantTextDelta(type="assistant", text=out)
+                        # Mark that we must stop this turn to wait for user input
+                        stop_turn = True
+                        break # Don't execute any more tools this turn
+
                     out = await self._execute_tool(name, args)
                     results.append({"call_id": call["call_id"], "tool_name": name, "output": out})
+
+                if stop_turn:
+                    # Gracefully end the current turn loop
+                    break
 
                 current_prompt = self._format_tool_results(results)
                 current_resume = state.session_id
