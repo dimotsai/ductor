@@ -275,11 +275,10 @@ class GeminiCLI(BaseCLI):
         turn_requested_tools: dict[str, dict[str, Any]] = {}
         turn_completed_tool_ids: set[str] = set()
 
-        # Tools we ALWAYS want to run manually to ensure Windows optimizations and permissions
-        OVERRIDE_TOOLS = {
-            "ask_user"
-        }
-
+        # Tools that must ALWAYS be executed manually via ductor's fallback loop
+        # either for Telegram UI interaction (ask_user) or because they are not in the allowed list.
+        allowed = self._config.allowed_tools or []
+        
         try:
             async with asyncio.timeout(timeout_seconds or 300.0):
                 while True:
@@ -320,18 +319,11 @@ class GeminiCLI(BaseCLI):
 
                         if isinstance(event, AssistantTextDelta):
                             # Button De-duplication Logic
-                            # 1. Strip [button:...] from the text immediately so it doesn't show up in intermediate streams.
-                            # 2. Store the buttons in a buffer.
-                            # 3. If a ToolUseEvent occurs in this turn, discard the buffer (it was an intermediate thought).
-                            # 4. If the turn ends WITHOUT tools, yield the buffered buttons.
-                            
                             text = event.text
                             if "[button:" in text:
                                 import re
-                                # Extract buttons
                                 buttons = re.findall(r"\[button:.*?\]", text)
                                 state.button_buffer.extend(buttons)
-                                # Remove buttons from text for now
                                 text = re.sub(r"\[button:.*?\]", "", text)
                             
                             if text:
@@ -339,7 +331,6 @@ class GeminiCLI(BaseCLI):
                             continue
 
                         if isinstance(event, ToolUseEvent):
-                            # Tool used! The previous buttons were just "thoughts", discard them.
                             state.button_buffer.clear()
                             
                             turn_requested_tools[event.call_id] = {
@@ -352,8 +343,11 @@ class GeminiCLI(BaseCLI):
                             tid = getattr(event, "tool_id", None)
                             if tid:
                                 req = turn_requested_tools.get(tid, {})
-                                # Only mark as completed if it succeeded internally AND isn't an override tool
-                                if getattr(event, "status", "") == "success" and req.get("name") not in OVERRIDE_TOOLS:
+                                # Only mark as completed if it succeeded internally AND is in the allowed list
+                                # AND is not ask_user (which we always want to handle manually)
+                                if (getattr(event, "status", "") == "success" and 
+                                    req.get("name") in allowed and 
+                                    req.get("name") != "ask_user"):
                                     turn_completed_tool_ids.add(tid)
                             continue
 
