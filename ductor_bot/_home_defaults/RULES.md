@@ -23,6 +23,7 @@ Read in this order:
 
 ## Operating Rules
 
+- **Gemini CLI Warning**: Do NOT use the built-in `ask_user` tool; it is incompatible with this environment. Always use `ask_user.py` from the tools directory when interaction is needed.
 - Use tool scripts in `workspace/tools/` for cron/webhook lifecycle changes.
 Do not manually edit `cron_jobs.json` or `webhooks.json` for normal operations.
 - When config changes are requested, edit only requested keys in `config/config.json`.

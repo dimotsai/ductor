@@ -171,6 +171,13 @@ class RulesSelector:
                     deployed_count += 1
                     logger.debug("Deployed: %s -> AGENTS.md", template.name)
 
+                # Deploy GEMINI.md if Gemini is authenticated
+                if self._gemini_authenticated:
+                    gemini_dst = dst_dir / "GEMINI.md"
+                    shutil.copy2(template, gemini_dst)
+                    deployed_count += 1
+                    logger.debug("Deployed: %s -> GEMINI.md", template.name)
+
             except OSError:
                 logger.exception("Failed to deploy %s", template)
 
@@ -216,6 +223,9 @@ class RulesSelector:
                 logger.info(
                     "Cleaned up %d stale CLAUDE.md files (Claude not authenticated)", removed
                 )
+            # Special case: If only Codex (but not Gemini) is authenticated, remove GEMINI.md
+            if not self._gemini_authenticated:
+                self._remove_files_by_name("GEMINI.md")
             return
 
         # Neither authenticated (shouldn't happen, but handle gracefully)
