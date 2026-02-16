@@ -413,7 +413,12 @@ class GeminiCLI(BaseCLI):
             )
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60.0)
-                return stdout.decode(errors='replace') if process.returncode == 0 else f"Error: {stderr.decode()}"
+                if process.returncode == 0:
+                    return stdout.decode(errors='replace')
+                else:
+                    out = stdout.decode(errors='replace').strip()
+                    err = stderr.decode(errors='replace').strip()
+                    return f"Error (code {process.returncode}): {err}\n{out}".strip()
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
