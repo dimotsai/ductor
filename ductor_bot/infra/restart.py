@@ -37,7 +37,7 @@ def consume_restart_sentinel(*, sentinel_path: Path) -> dict[str, Any] | None:
         return None
     try:
         data: dict[str, Any] = json.loads(sentinel_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, ValueError):
         logger.exception("Failed to read restart sentinel")
         sentinel_path.unlink(missing_ok=True)
         return None

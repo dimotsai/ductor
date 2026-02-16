@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from pathlib import Path
 from shutil import which
 from typing import TYPE_CHECKING
 
@@ -19,6 +21,8 @@ def build_cmd(exec_config: TaskExecutionConfig, prompt: str) -> list[str] | None
     """Build a CLI command for one-shot cron execution."""
     if exec_config.provider == "codex":
         return _build_codex_cmd(exec_config, prompt)
+    if exec_config.provider == "gemini":
+        return _build_gemini_cmd(exec_config, prompt)
     return _build_claude_cmd(exec_config, prompt)
 
 
@@ -34,7 +38,7 @@ def enrich_instruction(instruction: str, task_folder: str) -> str:
 
 
 def parse_claude_result(stdout: bytes) -> str:
-    """Extract result text from Claude CLI JSON output."""
+    """Extract result text from Claude or Gemini CLI JSON output."""
     if not stdout:
         return ""
     raw = stdout.decode(errors="replace").strip()
@@ -42,7 +46,8 @@ def parse_claude_result(stdout: bytes) -> str:
         return ""
     try:
         data = json.loads(raw)
-        return str(data.get("result", ""))
+        # Gemini uses 'output' or 'response', Claude uses 'result'
+        return str(data.get("output") or data.get("response") or data.get("result") or raw)
     except json.JSONDecodeError:
         return raw[:2000]
 
@@ -64,6 +69,49 @@ def indent(text: str, prefix: str) -> str:
 
 
 # -- Private builders --
+
+
+def _find_gemini_cli_js() -> str | None:
+    """Find the absolute path to the Gemini CLI's index.js to bypass wrappers on Windows."""
+    if os.name != "nt":
+        return None
+
+    prefixes = [
+        Path("C:/nvm4w/nodejs"),
+        Path(os.environ.get("APPDATA", "")) / "npm",
+        Path(os.environ.get("ProgramFiles", "")) / "nodejs",
+    ]
+
+    for p in prefixes:
+        js = p / "node_modules" / "@google" / "gemini-cli" / "dist" / "index.js"
+        if js.is_file():
+            return str(js)
+
+    return None
+
+
+def _build_gemini_cmd(exec_config: TaskExecutionConfig, prompt: str) -> list[str] | None:
+    """Build a Gemini CLI command for one-shot cron execution."""
+    js = _find_gemini_cli_js()
+    if js:
+        cmd = ["node", js]
+    else:
+        cli = which("gemini")
+        if not cli:
+            return None
+        cmd = [cli]
+
+    cmd += ["--output-format", "json", "--include-directories", "."]
+
+    if exec_config.model:
+        cmd += ["--model", exec_config.model]
+    if exec_config.permission_mode == "bypassPermissions":
+        cmd += ["--approval-mode", "yolo"]
+
+    # Add extra CLI parameters
+    cmd.extend(exec_config.cli_parameters)
+
+    return cmd
 
 
 def _build_claude_cmd(exec_config: TaskExecutionConfig, prompt: str) -> list[str] | None:

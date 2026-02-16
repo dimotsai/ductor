@@ -223,9 +223,17 @@ class CronObserver:
             cli_parameters=job.cli_parameters if job else [],
         )
 
-        exec_config = self._resolve_execution_config(overrides)
-        enriched = enrich_instruction(instruction, task_folder)
-        cmd = build_cmd(exec_config, enriched)
+        try:
+            exec_config = self._resolve_execution_config(overrides)
+            enriched = enrich_instruction(instruction, task_folder)
+            cmd = build_cmd(exec_config, enriched)
+        except Exception:
+            logger.exception("Failed to prepare execution for cron job %s", job_id)
+            self._manager.update_run_status(
+                job_id,
+                status="error:preparation_failed",
+            )
+            return
 
         if cmd is None:
             logger.error("%s CLI not found for cron job %s", exec_config.provider, job_id)
@@ -248,7 +256,7 @@ class CronObserver:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             cwd=str(folder),
-            stdin=asyncio.subprocess.DEVNULL,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -256,7 +264,9 @@ class CronObserver:
         timed_out = False
         try:
             async with asyncio.timeout(timeout):
-                stdout, stderr = await proc.communicate()
+                # Only Gemini needs prompt via stdin (built-in builders for Claude/Codex still use args)
+                stdin_data = enriched.encode() if exec_config.provider == "gemini" else None
+                stdout, stderr = await proc.communicate(input=stdin_data)
         except TimeoutError:
             timed_out = True
             logger.warning("Cron job %s timed out after %.0fs, killing process", job_id, timeout)

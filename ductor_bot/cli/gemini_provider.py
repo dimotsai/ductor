@@ -201,24 +201,6 @@ class GeminiCLI(BaseCLI):
                     name = call["name"]
                     args = call["arguments"]
 
-                    # Permission Guard for Semi-automatic mode
-                    dangerous_tools = {"write_file", "replace", "run_shell_command", "delete_file"}
-                    if name in dangerous_tools and self._config.permission_mode != "bypassPermissions":
-                        # We don't have a way to 'wait' here in the middle of a tool loop 
-                        # without blocking the whole bot. Instead, we fail the tool and 
-                        # tell the AI it MUST ask the user first.
-                        results.append({
-                            "call_id": call["call_id"], 
-                            "tool_name": name, 
-                            "output": (
-                                f"Error: Permission denied for '{name}'. "
-                                "In semi-automatic mode, you MUST use the 'ask_user' tool FIRST "
-                                "to describe exactly what you are going to do and wait for the user to say 'Yes'. "
-                                "Do not attempt this action again until you have received explicit confirmation."
-                            )
-                        })
-                        continue
-
                     out = await self._execute_tool(name, args)
                     results.append({"call_id": call["call_id"], "tool_name": name, "output": out})
 
@@ -281,8 +263,7 @@ class GeminiCLI(BaseCLI):
 
         # Tools we ALWAYS want to run manually to ensure Windows optimizations and permissions
         OVERRIDE_TOOLS = {
-            "ask_user", "run_shell_command", "google_web_search", 
-            "google_search", "transcribe_audio", "write_file", "replace"
+            "ask_user", "run_shell_command", "write_file", "replace"
         }
 
         try:
@@ -323,7 +304,30 @@ class GeminiCLI(BaseCLI):
                         if not seen_new:
                             continue
 
+                        if isinstance(event, AssistantTextDelta):
+                            # Button De-duplication Logic
+                            # 1. Strip [button:...] from the text immediately so it doesn't show up in intermediate streams.
+                            # 2. Store the buttons in a buffer.
+                            # 3. If a ToolUseEvent occurs in this turn, discard the buffer (it was an intermediate thought).
+                            # 4. If the turn ends WITHOUT tools, yield the buffered buttons.
+                            
+                            text = event.text
+                            if "[button:" in text:
+                                import re
+                                # Extract buttons
+                                buttons = re.findall(r"\[button:.*?\]", text)
+                                state.button_buffer.extend(buttons)
+                                # Remove buttons from text for now
+                                text = re.sub(r"\[button:.*?\]", "", text)
+                            
+                            if text:
+                                yield AssistantTextDelta(type="assistant", text=text)
+                            continue
+
                         if isinstance(event, ToolUseEvent):
+                            # Tool used! The previous buttons were just "thoughts", discard them.
+                            state.button_buffer.clear()
+                            
                             turn_requested_tools[event.call_id] = {
                                 "name": event.tool_name,
                                 "arguments": event.arguments,
@@ -351,6 +355,13 @@ class GeminiCLI(BaseCLI):
             stderr_bytes = await stderr_task
             await process.wait()
             logger.info("CLI turn finished in %.2fs (exit=%d)", time.time() - start_t, process.returncode)
+
+            # If no tools were requested this turn, it means we are done (or at least this turn is a response).
+            # Yield any buffered buttons now.
+            if not turn_requested_tools and state.button_buffer:
+                button_text = "\n".join(state.button_buffer)
+                yield AssistantTextDelta(type="assistant", text="\n" + button_text)
+                state.button_buffer.clear()
 
             # Identify tools that need manual fallback or override
             manual_tools = [t for tid, t in turn_requested_tools.items() if tid not in turn_completed_tool_ids]
@@ -417,6 +428,7 @@ class _StreamState:
         self.usage = {"input_tokens": 0, "output_tokens": 0}
         self.error_occurred = False
         self.pending_tools: list[dict[str, Any]] = []
+        self.button_buffer: list[str] = []
 
     def add_usage(self, usage: dict[str, Any] | None) -> None:
         if usage:
