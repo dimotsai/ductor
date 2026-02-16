@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ductor is a Telegram bot that bridges messages to Claude Code CLI, OpenAI Codex CLI, or Google Gemini CLI for AI-powered assistance. It streams responses back to Telegram with live editing, manages persistent sessions, runs scheduled cron jobs, handles inbound webhooks, and performs periodic heartbeat checks.
+ductor is a Telegram bot that bridges messages to Claude Code CLI or OpenAI Codex CLI for AI-powered assistance. It streams responses back to Telegram with live editing, manages persistent sessions, runs scheduled cron jobs, handles inbound webhooks, and performs periodic heartbeat checks.
 
 **Stack:** Python 3.11+, aiogram 3.x, Pydantic 2.x, asyncio, hatchling build system.
 
@@ -38,7 +38,7 @@ mypy ductor_bot
 
 ```
 Telegram Update → aiogram Router → AuthMiddleware → SequentialMiddleware (per-chat lock + queue tracking)
-  → TelegramBot handler → Orchestrator → CLIService → Claude/Codex/Gemini subprocess
+  → TelegramBot handler → Orchestrator → CLIService → Claude/Codex subprocess
   → Streamed response → Telegram
 ```
 
@@ -48,7 +48,7 @@ Telegram Update → aiogram Router → AuthMiddleware → SequentialMiddleware (
 |--------|---------|
 | `bot/` | Telegram frontend: aiogram handlers, streaming editors, rich sender, middleware, file browser, response formatting |
 | `orchestrator/` | Central router: command registry, message flows, hooks, model selector, directives |
-| `cli/` | CLI subprocess management: Claude/Codex/Gemini providers, stream event parsing, process registry |
+| `cli/` | CLI subprocess management: Claude/Codex providers, stream event parsing, process registry |
 | `session/` | Per-chat session lifecycle, JSON persistence (`sessions.json`) |
 | `cron/` | In-process scheduler: cron expression evaluation, timezone-aware execution |
 | `heartbeat/` | Periodic background checks in active sessions during non-quiet hours |

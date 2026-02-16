@@ -173,9 +173,7 @@ class GeminiCLI(BaseCLI):
                 await process.stdin.drain()
                 process.stdin.close()
 
-            seen_new = False
             last_session_id = resume_session
-            intercepted_buttons = ""
 
             try:
                 async with asyncio.timeout(timeout_seconds or 300.0):
@@ -186,41 +184,13 @@ class GeminiCLI(BaseCLI):
                         line = line_b.decode(errors="replace").rstrip()
                         if not line:
                             continue
+                        
+                        logger.info("Gemini raw line: %s", line)
 
                         for event in parse_stream_line(line, last_session_id=last_session_id):
                             if getattr(event, "session_id", None):
                                 last_session_id = event.session_id
-
-                            if event.type in ("system", "init"):
-                                continue
-
-                            # 1. Capture ask_user parameters
-                            if isinstance(event, ToolUseEvent) and event.tool_name == "ask_user":
-                                logger.info("Intercepted ask_user: %s", event.arguments)
-                                questions = event.arguments.get("questions", [])
-                                q_data = questions[0] if isinstance(questions, list) and questions else event.arguments
-                                q_type = q_data.get("type", "choice")
-                                options = q_data.get("options", [])
-                                
-                                if q_type == "yesno":
-                                    intercepted_buttons = "\n\n[button:Yes] [button:No]"
-                                elif q_type == "choice" and options:
-                                    btns = [f"[button:{opt.get('label', str(opt))}]" for opt in options]
-                                    intercepted_buttons = "\n\n" + "\n".join(btns)
-
-                            # 2. Append buttons to the final ResultEvent
-                            if isinstance(event, ResultEvent):
-                                if intercepted_buttons:
-                                    event.result = (event.result or "") + intercepted_buttons
-                                yield event
-                                return
-
-                            if event.delta or isinstance(event, ToolUseEvent) or (event.type == "assistant" and getattr(event, "text", "")):
-                                seen_new = True
-
-                            if seen_new:
-                                # We still yield the text, but the buttons will be attached to the final result
-                                yield event
+                            yield event
 
             except TimeoutError:
                 process.kill()

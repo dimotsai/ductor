@@ -101,12 +101,20 @@ def parse_stream_line(line: str, last_session_id: str | None = None) -> list[Str
             "input_tokens": stats.get("input_tokens", 0),
             "output_tokens": stats.get("output_tokens", 0),
         }
+        
+        # Safely extract result or error message
+        res = data.get("result") or data.get("response") or data.get("output")
+        if not res:
+            err = data.get("error")
+            if err:
+                res = err.get("message") if isinstance(err, dict) else str(err)
+        
         return [
             ResultEvent(
                 type=event_type,
                 subtype=data.get("subtype"),
                 session_id=data.get("session_id") or last_session_id,
-                result=data.get("result") or data.get("response") or data.get("output") or (data.get("error", {}).get("message") if isinstance(data.get("error"), dict) else str(data.get("error"))) or "",
+                result=res or "",
                 is_error=data.get("is_error", False) or data.get("status") == "error",
                 duration_ms=data.get("duration_ms") or stats.get("duration_ms"),
                 duration_api_ms=data.get("duration_api_ms"),
