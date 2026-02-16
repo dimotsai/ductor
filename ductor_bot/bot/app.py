@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import html as html_mod
 import logging
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -81,6 +82,7 @@ _HELP_TEXT = fmt(
     "/info -- Docs, links & about\n"
     "/upgrade -- Check for updates\n"
     "/restart -- Restart bot\n"
+    "/rollback -- Revert to stable\n"
     "/diagnose -- Show system diagnostics\n"
     "/help -- Show all commands",
     SEP,
@@ -209,6 +211,7 @@ class TelegramBot:
         r.message(Command("info"))(self._on_info)
         r.message(Command("stop"))(self._on_stop)
         r.message(Command("restart"))(self._on_restart)
+        r.message(Command("rollback"))(self._on_rollback)
         r.message(Command("new"))(self._on_new)
         r.message(Command("showfiles"))(self._on_showfiles)
         for cmd in ("status", "memory", "model", "cron", "diagnose", "upgrade"):
@@ -381,6 +384,48 @@ class TelegramBot:
         )
         text = fmt("**Restarting**", SEP, "Bot is shutting down and will be back shortly.")
         await send_rich(self._bot, message.chat.id, text, reply_to=message)
+        self._exit_code = EXIT_RESTART
+        asyncio.create_task(self._dp.stop_polling())  # noqa: RUF006
+
+    async def _on_rollback(self, message: Message) -> None:
+        """Handle /rollback: hard reset to last-stable tag and restart."""
+        from ductor_bot.infra.restart import write_restart_sentinel
+
+        chat_id = message.chat.id
+        project_root = self._orch.paths.framework_root
+
+        # 1. Perform git reset
+        try:
+            # We use subprocess.run for blocking git operations
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ["git", "reset", "--hard", "last-stable"],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            git_output = (result.stdout + result.stderr).strip()
+            status_text = "Success" if result.returncode == 0 else f"Failed (code {result.returncode})"
+        except Exception as e:
+            status_text = f"Error: {e}"
+            git_output = ""
+
+        # 2. Write sentinel for post-restart message
+        sentinel_msg = fmt(
+            "**Rollback Completed**",
+            SEP,
+            f"Status: `{status_text}`",
+            f"Git: `{git_output[:200]}`",
+        )
+        sentinel_path = self._orch.paths.ductor_home / "restart-sentinel.json"
+        await asyncio.to_thread(
+            write_restart_sentinel, chat_id, sentinel_msg, sentinel_path=sentinel_path
+        )
+
+        # 3. Trigger restart
+        text = fmt("**Rolling back...**", SEP, "Resetting to `last-stable` and restarting.")
+        await send_rich(self._bot, chat_id, text, reply_to=message)
         self._exit_code = EXIT_RESTART
         asyncio.create_task(self._dp.stop_polling())  # noqa: RUF006
 
