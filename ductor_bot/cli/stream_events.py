@@ -106,7 +106,7 @@ def parse_stream_line(line: str, last_session_id: str | None = None) -> list[Str
                 type=event_type,
                 subtype=data.get("subtype"),
                 session_id=data.get("session_id") or last_session_id,
-                result=data.get("result") or (data.get("error", {}).get("message") if isinstance(data.get("error"), dict) else str(data.get("error"))) or "",
+                result=data.get("result") or data.get("response") or data.get("output") or (data.get("error", {}).get("message") if isinstance(data.get("error"), dict) else str(data.get("error"))) or "",
                 is_error=data.get("is_error", False) or data.get("status") == "error",
                 duration_ms=data.get("duration_ms") or stats.get("duration_ms"),
                 duration_api_ms=data.get("duration_api_ms"),
