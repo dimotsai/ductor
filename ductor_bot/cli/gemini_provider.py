@@ -91,6 +91,18 @@ class GeminiCLI(BaseCLI):
         env["GEMINI_IDE_ENABLED"] = "false"
         if system_prompt_path:
             env["GEMINI_SYSTEM_MD"] = system_prompt_path
+            
+        # Add tools to PATH
+        tools_root = self._working_dir / "tools"
+        tool_paths = [
+            str(tools_root),
+            str(tools_root / "user_tools"),
+            str(tools_root / "telegram_tools"),
+            str(tools_root / "cron_tools"),
+            str(tools_root / "webhook_tools"),
+        ]
+        env["PATH"] = os.pathsep.join(tool_paths) + os.pathsep + env.get("PATH", "")
+        
         return env
 
     @contextmanager
@@ -137,7 +149,7 @@ class GeminiCLI(BaseCLI):
         continue_session: bool = False,
         timeout_seconds: float | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
-        """Claude-style streaming: Single process, no recursive loops."""
+        """Claude-style streaming: Single process with robust ask_user handling."""
         cmd = self._build_command(resume_session, continue_session, streaming=True)
         _log_cmd(cmd, streaming=True)
 
@@ -154,10 +166,8 @@ class GeminiCLI(BaseCLI):
                 env=env,
             )
             
-            # Start stderr drain in background
             stderr_task = asyncio.create_task(process.stderr.read())
             
-            # Feed prompt and close stdin
             if process.stdin:
                 process.stdin.write(prompt.encode())
                 await process.stdin.drain()
@@ -165,6 +175,7 @@ class GeminiCLI(BaseCLI):
 
             seen_new = False
             last_session_id = resume_session
+            intercepted_buttons = ""
 
             try:
                 async with asyncio.timeout(timeout_seconds or 300.0):
@@ -180,20 +191,35 @@ class GeminiCLI(BaseCLI):
                             if getattr(event, "session_id", None):
                                 last_session_id = event.session_id
 
-                            # Progress tracking logic (like Claude)
                             if event.type in ("system", "init"):
                                 continue
 
-                            # Result events are the final word
+                            # 1. Capture ask_user parameters
+                            if isinstance(event, ToolUseEvent) and event.tool_name == "ask_user":
+                                logger.info("Intercepted ask_user: %s", event.arguments)
+                                questions = event.arguments.get("questions", [])
+                                q_data = questions[0] if isinstance(questions, list) and questions else event.arguments
+                                q_type = q_data.get("type", "choice")
+                                options = q_data.get("options", [])
+                                
+                                if q_type == "yesno":
+                                    intercepted_buttons = "\n\n[button:Yes] [button:No]"
+                                elif q_type == "choice" and options:
+                                    btns = [f"[button:{opt.get('label', str(opt))}]" for opt in options]
+                                    intercepted_buttons = "\n\n" + "\n".join(btns)
+
+                            # 2. Append buttons to the final ResultEvent
                             if isinstance(event, ResultEvent):
+                                if intercepted_buttons:
+                                    event.result = (event.result or "") + intercepted_buttons
                                 yield event
                                 return
 
-                            # Gemini-specific: skip re-echoed history
                             if event.delta or isinstance(event, ToolUseEvent) or (event.type == "assistant" and getattr(event, "text", "")):
                                 seen_new = True
 
                             if seen_new:
+                                # We still yield the text, but the buttons will be attached to the final result
                                 yield event
 
             except TimeoutError:
