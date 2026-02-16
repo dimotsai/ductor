@@ -263,7 +263,7 @@ class GeminiCLI(BaseCLI):
 
         # Tools we ALWAYS want to run manually to ensure Windows optimizations and permissions
         OVERRIDE_TOOLS = {
-            "ask_user", "run_shell_command", "write_file", "replace"
+            "ask_user"
         }
 
         try:
