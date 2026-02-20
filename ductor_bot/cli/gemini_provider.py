@@ -37,8 +37,8 @@ class GeminiCLI(BaseCLI):
             "Gemini CLI wrapper (Claude-style): cwd=%s, model=%s", self._working_dir, config.model
         )
 
-    @staticmethod
-    def _find_cli_js() -> str | None:
+    @classmethod
+    def _find_cli_js(cls) -> str | None:
         """Find the absolute path to the Gemini CLI's index.js via npm."""
         import subprocess
         from shutil import which
