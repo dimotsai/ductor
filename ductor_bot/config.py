@@ -202,8 +202,8 @@ def resolve_user_timezone(configured: str = "") -> ZoneInfo:
     return ZoneInfo("UTC")
 
 
-_CLAUDE_MODELS: frozenset[str] = frozenset({"haiku", "sonnet", "opus"})
-_GEMINI_MODELS: frozenset[str] = frozenset(
+CLAUDE_MODELS: frozenset[str] = frozenset({"haiku", "sonnet", "opus"})
+GEMINI_MODELS: frozenset[str] = frozenset(
     {
         "auto",
         "pro",
@@ -240,9 +240,9 @@ class ModelRegistry:
     @staticmethod
     def provider_for(model_id: str) -> str:
         """Return the provider for a model ID."""
-        if model_id in _CLAUDE_MODELS:
+        if model_id in CLAUDE_MODELS:
             return "claude"
-        if model_id in _GEMINI_MODELS or model_id.startswith("gemini"):
+        if model_id in GEMINI_MODELS or model_id.startswith("gemini"):
             return "gemini"
         return "codex"
 

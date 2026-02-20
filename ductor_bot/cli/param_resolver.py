@@ -5,13 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from ductor_bot.config import CLAUDE_MODELS, GEMINI_MODELS
 from ductor_bot.errors import DuctorError
 
 if TYPE_CHECKING:
     from ductor_bot.cli.codex_cache import CodexModelCache
     from ductor_bot.config import AgentConfig
-
-_CLAUDE_MODELS: frozenset[str] = frozenset({"haiku", "sonnet", "opus"})
 
 
 @dataclass(frozen=True)
@@ -74,12 +73,13 @@ def resolve_cli_config(
 
     # 3. Validate model
     if provider == "claude":
-        if model not in _CLAUDE_MODELS:
-            msg = f"Invalid Claude model: {model}. Must be one of {sorted(_CLAUDE_MODELS)}"
+        if model not in CLAUDE_MODELS:
+            msg = f"Invalid Claude model: {model}. Must be one of {sorted(CLAUDE_MODELS)}"
             raise DuctorError(msg)
     elif provider == "gemini":
-        # Gemini models are hardcoded or prefix-based, no dynamic cache validation needed yet
-        pass
+        if model not in GEMINI_MODELS and not model.startswith("gemini-"):
+            msg = f"Invalid Gemini model: {model}. Must be one of {sorted(GEMINI_MODELS)} or start with 'gemini-'"
+            raise DuctorError(msg)
     else:  # codex
         if codex_cache is None:
             msg = "Codex cache is required for Codex model validation"

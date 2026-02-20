@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ductor_bot.cli.auth import AuthStatus, check_all_auth
-from ductor_bot.config import update_config_file_async
+from ductor_bot.config import CLAUDE_MODELS, GEMINI_MODELS, update_config_file_async
 
 if TYPE_CHECKING:
     from ductor_bot.cli.codex_cache import CodexModelCache
@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MS_PREFIX = "ms:"
-
-_CLAUDE_MODELS = ("haiku", "sonnet", "opus")
 
 _EFFORT_LABELS: dict[str, str] = {
     "low": "Low",
@@ -206,8 +204,11 @@ async def _build_model_step(
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Build the model selection keyboard for a provider."""
     if provider == "claude":
+        # Sort Claude models by size/capability
+        order = ["haiku", "sonnet", "opus"]
+        sorted_claude = sorted(CLAUDE_MODELS, key=lambda x: order.index(x) if x in order else 999)
         buttons = [
-            InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}") for m in _CLAUDE_MODELS
+            InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}") for m in sorted_claude
         ]
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -218,33 +219,20 @@ async def _build_model_step(
         return f"{header}\n\nSelect Claude model:", keyboard
 
     if provider == "gemini":
-        # Group 1: Auto & Aliases
-        aliases = ["auto", "auto-2.5", "pro", "flash", "flash-lite", "flash-8b"]
-        # Group 2: Specific versions
-        specific = [
-            "gemini-2.0-pro-exp-0211",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite-preview-02-05",
-            "gemini-1.5-pro",
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-8b",
-        ]
+        # Group Gemini models for better UI
+        core_aliases = {"auto", "pro", "flash", "flash-lite"}
+        core_models = [m for m in sorted(GEMINI_MODELS) if m in core_aliases]
+        other_models = [m for m in sorted(GEMINI_MODELS) if m not in core_aliases]
 
         rows = []
-        # Add aliases in rows of 2 or 3
-        current_row = []
-        for m in aliases:
-            current_row.append(InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}"))
-            if len(current_row) >= 3:
-                rows.append(current_row)
-                current_row = []
-        if current_row:
-            rows.append(current_row)
+        # Row 1: Core aliases
+        rows.append(
+            [InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}") for m in core_models]
+        )
 
-        # Add specific versions in rows of 2
+        # Other models in rows of 2
         current_row = []
-        for m in specific:
-            # Shorten names for buttons if possible, or just keep them
+        for m in other_models:
             label = m.replace("gemini-", "")
             current_row.append(InlineKeyboardButton(text=label, callback_data=f"ms:m:{m}"))
             if len(current_row) >= 2:
