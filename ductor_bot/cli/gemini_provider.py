@@ -37,6 +37,35 @@ class GeminiCLI(BaseCLI):
         logger.info(
             "Gemini CLI wrapper (Claude-style): cwd=%s, model=%s", self._working_dir, config.model
         )
+        self._trust_workspace()
+
+    def _trust_workspace(self) -> None:
+        """Programmatically trust the ductor workspace in Gemini CLI config."""
+        gemini_home = Path.home() / ".gemini"
+        trust_file = gemini_home / "trustedFolders.json"
+        workspace_path = str(self._working_dir)
+
+        # Normalize for Windows if applicable
+        if os.name == "nt":
+            workspace_path = workspace_path.replace("/", "\\")
+
+        try:
+            data: dict[str, str] = {}
+            if trust_file.is_file():
+                try:
+                    data = json.loads(trust_file.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    logger.warning("Corrupt Gemini trust file, starting fresh")
+
+            if workspace_path not in data:
+                data[workspace_path] = "TRUST_FOLDER"
+                gemini_home.mkdir(parents=True, exist_ok=True)
+                trust_file.write_text(
+                    json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+                logger.info("Trusted workspace in Gemini CLI: %s", workspace_path)
+        except Exception:
+            logger.warning("Failed to update Gemini trusted folders", exc_info=True)
 
     @classmethod
     def _find_cli_js(cls) -> str | None:
