@@ -141,20 +141,7 @@ def _walk_and_copy(src: Path, dst: Path, root_src: Path | None = None) -> None:
     if root_src is None:
         root_src = src
 
-    if os.path.lexists(dst):
-        if not dst.is_dir():
-            # Broken link or file in the way of a directory
-            try:
-                if dst.is_symlink():
-                    dst.unlink()
-                else:
-                    dst.unlink()
-                dst.mkdir(parents=True, exist_ok=True)
-            except OSError:
-                logger.warning("Failed to clean up blocking path: %s", dst)
-    else:
-        dst.mkdir(parents=True, exist_ok=True)
-
+    dst.mkdir(parents=True, exist_ok=True)
     for entry in sorted(src.iterdir()):
         if _should_skip_entry(entry):
             continue
@@ -167,28 +154,7 @@ def _walk_and_copy(src: Path, dst: Path, root_src: Path | None = None) -> None:
         elif entry.name in _ZONE2_FILES:
             _handle_zone2_file(entry, target, dst)
         else:
-            # Check if this .py file is in a Zone 2 directory
-            try:
-                rel_dir = src.relative_to(root_src)
-                is_zone2_py = (
-                    entry.suffix == ".py"
-                    and str(rel_dir) in _ZONE2_PY_DIRS
-                )
-            except ValueError:
-                is_zone2_py = False
-
-            if is_zone2_py:
-                # Zone 2 .py file: always overwrite (framework-controlled)
-                if target.is_symlink():
-                    target.unlink()
-                shutil.copy2(entry, target)
-                logger.debug("Zone 2 copy (framework tool): %s", target)
-            elif not target.exists():
-                # Zone 3: seed only (user-owned, never overwritten)
-                shutil.copy2(entry, target)
-                logger.debug("Zone 3 seed: %s", target)
-            else:
-                logger.debug("Zone 3 skip: %s (exists)", target)
+            _handle_regular_file(entry, target, src, root_src)
 
 
 # ---------------------------------------------------------------------------
