@@ -13,7 +13,7 @@ from ductor_bot.cli.codex_cache import CodexModelCache
 from ductor_bot.cli.codex_cache_observer import CodexCacheObserver
 from ductor_bot.cli.process_registry import ProcessRegistry
 from ductor_bot.cli.service import CLIService, CLIServiceConfig
-from ductor_bot.config import CLAUDE_MODELS, GEMINI_MODELS, AgentConfig, ModelRegistry
+from ductor_bot.config import _CLAUDE_MODELS, _GEMINI_MODELS, AgentConfig, ModelRegistry
 from ductor_bot.cron.manager import CronManager
 from ductor_bot.cron.observer import CronObserver
 from ductor_bot.errors import (
@@ -73,7 +73,7 @@ class Orchestrator:
         self._paths: DuctorPaths = paths
         self._docker: DockerManager | None = None
         self._models = ModelRegistry()
-        self._known_model_ids: frozenset[str] = CLAUDE_MODELS | GEMINI_MODELS
+        self._known_model_ids: frozenset[str] = _CLAUDE_MODELS | _GEMINI_MODELS
         self._sessions = SessionManager(paths.sessions_path, config)
         self._process_registry = ProcessRegistry()
         self._available_providers: frozenset[str] = frozenset()

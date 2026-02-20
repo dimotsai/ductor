@@ -31,16 +31,6 @@ _SKIP_DIRS: frozenset[str] = frozenset(
 _SKILL_SYNC_INTERVAL = 30.0
 
 
-def _is_junction(path: Path) -> bool:
-    """Return ``True`` if *path* is a Windows junction."""
-    if not _IS_WINDOWS:
-        return False
-    try:
-        return bool(path.lstat().st_file_attributes & 1024)  # FILE_ATTRIBUTE_REPARSE_POINT
-    except (OSError, AttributeError):
-        return False
-
-
 def _is_under(child: Path, parent: Path) -> bool:
     """Return ``True`` if *child* is located under *parent* directory."""
     try:
@@ -155,20 +145,12 @@ def _ensure_link(link_path: Path, target: Path) -> bool:
     Returns ``True`` if a new link was created, ``False`` if already correct
     or if *link_path* is a real directory (never destroyed).
     """
-    if os.path.lexists(link_path):
-        if not link_path.is_symlink() and not _is_junction(link_path):
-            # Real directory, leave it alone
+    if link_path.exists() and not link_path.is_symlink():
+        return False
+    if link_path.is_symlink():
+        if link_path.resolve() == target.resolve():
             return False
-
-        try:
-            if link_path.resolve() == target.resolve():
-                return False
-        except (OSError, ValueError):
-            # Broken link, must be recreated
-            pass
-
         link_path.unlink()
-
     _create_dir_link(link_path, target)
     return True
 
@@ -280,9 +262,18 @@ def sync_bundled_skills(paths: DuctorPaths) -> None:
             continue
 
         target = target_dir / entry.name
+
+        if target.exists() and not target.is_symlink():
+            continue
+
+        if target.is_symlink():
+            if target.resolve() == entry.resolve():
+                continue
+            target.unlink()
+
         try:
-            if _ensure_link(target, entry):
-                logger.info("Bundled skill linked: %s -> %s", target, entry)
+            _create_dir_link(target, entry)
+            logger.info("Bundled skill linked: %s -> %s", target, entry)
         except OSError:
             logger.warning("Failed to link bundled skill %s", entry.name, exc_info=True)
 
