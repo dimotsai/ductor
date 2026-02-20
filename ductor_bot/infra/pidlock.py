@@ -20,33 +20,20 @@ _IS_WINDOWS = sys.platform == "win32"
 
 def _is_process_alive(pid: int) -> bool:
     """Check if a process with the given PID is still running."""
-    import subprocess
-
+    if _IS_WINDOWS and pid == os.getpid():
+        return True
     try:
         os.kill(pid, 0)
-
-        # On Windows, os.kill(pid, 0) can sometimes return True for zombie or ghost processes.
-        # Verify it's actually a python process.
-        if _IS_WINDOWS:
-            try:
-                output = subprocess.check_output(
-                    ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                )
-                return "python" in output.lower()
-            except Exception:
-                # If tasklist fails, fall back to the os.kill result
-                return True
-
-        return True
     except ProcessLookupError:
         return False
     except PermissionError:
         return True
     except OSError as e:
-        # Windows: [WinError 87] The parameter is incorrect usually means PID not found
-        return getattr(e, "winerror", 0) != 87
+        # On Windows, os.kill(pid, 0) throws WinError 87 if PID not found
+        if _IS_WINDOWS and getattr(e, "winerror", 0) == 87:
+            return False
+        raise
+    return True
 
 
 def _terminate_process(pid: int) -> None:
@@ -59,8 +46,7 @@ def _force_kill_process(pid: int) -> None:
     if _IS_WINDOWS:
         os.kill(pid, signal.SIGTERM)
     else:
-        # SIGKILL is not defined on Windows
-        os.kill(pid, getattr(signal, "SIGKILL", signal.SIGTERM))
+        os.kill(pid, signal.SIGKILL)
 
 
 def _kill_and_wait(pid: int) -> None:
