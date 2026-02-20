@@ -71,6 +71,7 @@ async def model_selector_start(
             [
                 InlineKeyboardButton(text="CLAUDE", callback_data="ms:p:claude"),
                 InlineKeyboardButton(text="CODEX", callback_data="ms:p:codex"),
+                InlineKeyboardButton(text="GEMINI", callback_data="ms:p:gemini"),
             ]
         ]
     )
@@ -216,8 +217,50 @@ async def _build_model_step(
         )
         return f"{header}\n\nSelect Claude model:", keyboard
 
+    if provider == "gemini":
+        # Group 1: Auto & Aliases
+        aliases = ["auto", "auto-2.5", "pro", "flash", "flash-lite", "flash-8b"]
+        # Group 2: Specific versions
+        specific = [
+            "gemini-2.0-pro-exp-0211",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite-preview-02-05",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+        ]
+
+        rows = []
+        # Add aliases in rows of 2 or 3
+        current_row = []
+        for m in aliases:
+            current_row.append(InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}"))
+            if len(current_row) >= 3:
+                rows.append(current_row)
+                current_row = []
+        if current_row:
+            rows.append(current_row)
+
+        # Add specific versions in rows of 2
+        current_row = []
+        for m in specific:
+            # Shorten names for buttons if possible, or just keep them
+            label = m.replace("gemini-", "")
+            current_row.append(InlineKeyboardButton(text=label, callback_data=f"ms:m:{m}"))
+            if len(current_row) >= 2:
+                rows.append(current_row)
+                current_row = []
+        if current_row:
+            rows.append(current_row)
+
+        rows.append([InlineKeyboardButton(text="<< Back", callback_data="ms:b:root")])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+        return f"{header}\n\nSelect Gemini model:", keyboard
+
     # Use cache instead of live discovery
     codex_models = codex_cache.models if codex_cache else []
+
     if not codex_models:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -246,6 +289,10 @@ async def _handle_model_selected(
     provider = orch._models.provider_for(model_id)
 
     if provider == "claude":
+        result = await switch_model(orch, chat_id, model_id)
+        return result, None
+
+    if provider == "gemini":
         result = await switch_model(orch, chat_id, model_id)
         return result, None
 

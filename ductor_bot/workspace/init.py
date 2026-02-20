@@ -141,7 +141,20 @@ def _walk_and_copy(src: Path, dst: Path, root_src: Path | None = None) -> None:
     if root_src is None:
         root_src = src
 
-    dst.mkdir(parents=True, exist_ok=True)
+    if os.path.lexists(dst):
+        if not dst.is_dir():
+            # Broken link or file in the way of a directory
+            try:
+                if dst.is_symlink():
+                    dst.unlink()
+                else:
+                    dst.unlink()
+                dst.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                logger.warning("Failed to clean up blocking path: %s", dst)
+    else:
+        dst.mkdir(parents=True, exist_ok=True)
+
     for entry in sorted(src.iterdir()):
         if _should_skip_entry(entry):
             continue
@@ -154,7 +167,28 @@ def _walk_and_copy(src: Path, dst: Path, root_src: Path | None = None) -> None:
         elif entry.name in _ZONE2_FILES:
             _handle_zone2_file(entry, target, dst)
         else:
-            _handle_regular_file(entry, target, src, root_src)
+            # Check if this .py file is in a Zone 2 directory
+            try:
+                rel_dir = src.relative_to(root_src)
+                is_zone2_py = (
+                    entry.suffix == ".py"
+                    and str(rel_dir) in _ZONE2_PY_DIRS
+                )
+            except ValueError:
+                is_zone2_py = False
+
+            if is_zone2_py:
+                # Zone 2 .py file: always overwrite (framework-controlled)
+                if target.is_symlink():
+                    target.unlink()
+                shutil.copy2(entry, target)
+                logger.debug("Zone 2 copy (framework tool): %s", target)
+            elif not target.exists():
+                # Zone 3: seed only (user-owned, never overwritten)
+                shutil.copy2(entry, target)
+                logger.debug("Zone 3 seed: %s", target)
+            else:
+                logger.debug("Zone 3 skip: %s (exists)", target)
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +318,35 @@ def _ensure_required_dirs(paths: DuctorPaths) -> None:
             logger.info("Created missing directory: %s", d)
 
 
+def _trust_gemini_workspace(paths: DuctorPaths) -> None:
+    """Programmatically trust the ductor workspace in Gemini CLI config."""
+    import os
+
+    gemini_home = Path.home() / ".gemini"
+    trust_file = gemini_home / "trustedFolders.json"
+    workspace_path = str(paths.workspace.resolve())
+
+    # Normalize for Windows if applicable
+    if os.name == "nt":
+        workspace_path = workspace_path.replace("/", "\\")
+
+    try:
+        data: dict[str, str] = {}
+        if trust_file.is_file():
+            try:
+                data = json.loads(trust_file.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                logger.warning("Corrupt Gemini trust file, starting fresh")
+
+        if workspace_path not in data:
+            data[workspace_path] = "TRUST_FOLDER"
+            gemini_home.mkdir(parents=True, exist_ok=True)
+            trust_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            logger.info("Trusted workspace in Gemini CLI: %s", workspace_path)
+    except Exception:
+        logger.warning("Failed to update Gemini trusted folders", exc_info=True)
+
+
 def init_workspace(paths: DuctorPaths) -> None:
     """Initialize the workspace: defaults sync, rule sync, config merge, cleanup."""
     logger.info("Workspace init started home=%s", paths.ductor_home)
@@ -291,6 +354,7 @@ def init_workspace(paths: DuctorPaths) -> None:
     sync_bundled_skills(paths)
     _sync_home_defaults(paths)
     _ensure_required_dirs(paths)
+    _trust_gemini_workspace(paths)
 
     # Deploy provider-specific rule files based on CLI auth status
     try:

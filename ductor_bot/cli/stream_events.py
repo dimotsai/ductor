@@ -49,6 +49,15 @@ class ToolUseEvent(StreamEvent):
     """Tool invocation detected during streaming."""
 
     tool_name: str = ""
+    # Main doesn't have arguments or call_id here, reverting to minimal
+
+
+class ToolResultEvent(StreamEvent):
+    """Tool execution result detected during streaming."""
+
+    tool_id: str | None = None
+    status: str = ""
+    output: str = ""
 
 
 class ThinkingEvent(StreamEvent):
@@ -86,14 +95,27 @@ def parse_stream_line(line: str) -> list[StreamEvent]:
 
     if event_type == "result":
         logger.debug("Stream event parsed type=%s", event_type)
+        stats = data.get("stats", {})
+        usage = data.get("usage") or {
+            "input_tokens": stats.get("input_tokens", 0),
+            "output_tokens": stats.get("output_tokens", 0),
+        }
+        
+        # Safely extract result or error message (for Gemini)
+        res = data.get("result") or data.get("response") or data.get("output")
+        if not res:
+            err = data.get("error")
+            if err:
+                res = err.get("message") if isinstance(err, dict) else str(err)
+        
         return [
             ResultEvent(
                 type=event_type,
                 subtype=data.get("subtype"),
                 session_id=data.get("session_id"),
-                result=data.get("result", ""),
-                is_error=data.get("is_error", False),
-                duration_ms=data.get("duration_ms"),
+                result=res or "",
+                is_error=data.get("is_error", False) or data.get("status") == "error",
+                duration_ms=data.get("duration_ms") or stats.get("duration_ms"),
                 duration_api_ms=data.get("duration_api_ms"),
                 total_cost_usd=data.get("total_cost_usd"),
                 usage=data.get("usage", {}),
@@ -106,9 +128,44 @@ def parse_stream_line(line: str) -> list[StreamEvent]:
     if event_type == "assistant":
         return _parse_assistant_content(data)
 
+    if event_type == "tool_use":
+        # Keep tool_use parsing from main?
+        name = data.get("tool_name", "")
+        if name:
+            return [ToolUseEvent(type="assistant", tool_name=name)]
+        return []
+
+    if event_type == "tool_result":
+        return [
+            ToolResultEvent(
+                type="tool_result",
+                tool_id=data.get("tool_id"),
+                status=data.get("status", ""),
+                output=data.get("output", ""),
+            )
+        ]
+
+    if event_type == "message":
+        # Gemini specific message event
+        # {"type":"message", "role":"assistant", "content":"..."}
+        role = data.get("role")
+        if role == "assistant":
+            return _parse_gemini_message_content(data)
+        return []
+
     if event_type == "system":
         logger.debug("Stream event parsed type=%s subtype=%s", event_type, data.get("subtype"))
         return _parse_system_event(data)
+        
+    if event_type == "init":
+        # Gemini init: {"type":"init", "session_id":"...", "model":"..."}
+        return [
+            SystemInitEvent(
+                type="system",
+                subtype="init",
+                session_id=data.get("session_id"),
+            ),
+        ]
 
     return []
 
@@ -176,3 +233,27 @@ def _parse_assistant_content(data: dict[str, Any]) -> list[StreamEvent]:
             )
 
     return events
+
+
+def _parse_gemini_message_content(data: dict[str, Any]) -> list[StreamEvent]:
+    """Parse Gemini message content which can be a string or blocks."""
+    content = data.get("content")
+    if not content:
+        return []
+
+    if isinstance(content, str):
+        return [AssistantTextDelta(type="assistant", text=content)]
+
+    if isinstance(content, list):
+        events: list[StreamEvent] = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            b_type = block.get("type")
+            if b_type == "text":
+                events.append(AssistantTextDelta(type="assistant", text=block.get("text", "")))
+            elif b_type == "tool_use":
+                events.append(ToolUseEvent(type="assistant", tool_name=block.get("name", "")))
+        return events
+
+    return []
