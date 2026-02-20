@@ -9,6 +9,7 @@ from shutil import which
 from typing import TYPE_CHECKING
 
 from ductor_bot.cli.codex_events import parse_codex_jsonl
+from ductor_bot.cli.gemini_events import parse_gemini_one_shot_result
 
 if TYPE_CHECKING:
     from ductor_bot.cli.param_resolver import TaskExecutionConfig
@@ -37,7 +38,7 @@ def enrich_instruction(instruction: str, task_folder: str) -> str:
 
 
 def parse_claude_result(stdout: bytes) -> str:
-    """Extract result text from Claude or Gemini CLI JSON output."""
+    """Extract result text from Claude CLI JSON output."""
     if not stdout:
         return ""
     raw = stdout.decode(errors="replace").strip()
@@ -45,10 +46,14 @@ def parse_claude_result(stdout: bytes) -> str:
         return ""
     try:
         data = json.loads(raw)
-        # Gemini uses 'output' or 'response', Claude uses 'result'
-        return str(data.get("output") or data.get("response") or data.get("result") or raw)
+        return str(data.get("result") or raw)
     except json.JSONDecodeError:
         return raw[:2000]
+
+
+def parse_gemini_result(stdout: bytes) -> str:
+    """Extract result text from Gemini CLI JSON output."""
+    return parse_gemini_one_shot_result(stdout)
 
 
 def parse_codex_result(stdout: bytes) -> str:
