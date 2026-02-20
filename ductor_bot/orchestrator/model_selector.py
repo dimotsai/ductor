@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ductor_bot.cli.auth import AuthStatus, check_all_auth
-from ductor_bot.config import CLAUDE_MODELS, GEMINI_MODELS, update_config_file_async
+from ductor_bot.config import update_config_file_async
 
 if TYPE_CHECKING:
     from ductor_bot.cli.codex_cache import CodexModelCache
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MS_PREFIX = "ms:"
+
+_CLAUDE_MODELS = ("haiku", "sonnet", "opus")
 
 _EFFORT_LABELS: dict[str, str] = {
     "low": "Low",
@@ -204,11 +206,8 @@ async def _build_model_step(
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Build the model selection keyboard for a provider."""
     if provider == "claude":
-        # Sort Claude models by size/capability
-        order = ["haiku", "sonnet", "opus"]
-        sorted_claude = sorted(CLAUDE_MODELS, key=lambda x: order.index(x) if x in order else 999)
         buttons = [
-            InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}") for m in sorted_claude
+            InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}") for m in _CLAUDE_MODELS
         ]
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -219,20 +218,24 @@ async def _build_model_step(
         return f"{header}\n\nSelect Claude model:", keyboard
 
     if provider == "gemini":
-        # Group Gemini models for better UI
-        core_aliases = {"auto", "pro", "flash", "flash-lite"}
-        core_models = [m for m in sorted(GEMINI_MODELS) if m in core_aliases]
-        other_models = [m for m in sorted(GEMINI_MODELS) if m not in core_aliases]
+        # Group 1: Core Aliases
+        core = ["auto", "pro", "flash", "flash-lite"]
+        # Group 2: Specific/Preview versions
+        versions = [
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-3-flash-preview",
+            "gemini-3-pro-preview",
+        ]
 
         rows = []
         # Row 1: Core aliases
-        rows.append(
-            [InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}") for m in core_models]
-        )
+        rows.append([InlineKeyboardButton(text=m.upper(), callback_data=f"ms:m:{m}") for m in core])
 
-        # Other models in rows of 2
+        # Version models in rows of 2
         current_row = []
-        for m in other_models:
+        for m in versions:
             label = m.replace("gemini-", "")
             current_row.append(InlineKeyboardButton(text=label, callback_data=f"ms:m:{m}"))
             if len(current_row) >= 2:
