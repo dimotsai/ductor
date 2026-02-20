@@ -1,4 +1,6 @@
-"""Stream event models and NDJSON parser for --output-format stream-json."""
+"""Stream event models and NDJSON parser for --output-format stream-json.
+This module provides a unified protocol layer for multiple CLI providers.
+"""
 
 from __future__ import annotations
 
@@ -12,26 +14,26 @@ logger = logging.getLogger(__name__)
 
 
 class StreamEvent(BaseModel):
-    """Base event from the Claude CLI stream-json output."""
+    """Base event for CLI stream-json output."""
 
     type: str
     subtype: str | None = None
 
 
 class AssistantTextDelta(StreamEvent):
-    """Text from an assistant turn."""
+    """Text chunk from an assistant response."""
 
     text: str = ""
 
 
 class SystemInitEvent(StreamEvent):
-    """First event of a stream -- contains session_id and tool list."""
+    """Initialization event containing session metadata."""
 
     session_id: str | None = None
 
 
 class ResultEvent(StreamEvent):
-    """Final event with usage, cost, and session_id."""
+    """Final summary event with metrics and execution status."""
 
     session_id: str | None = None
     result: str = ""
@@ -46,14 +48,15 @@ class ResultEvent(StreamEvent):
 
 
 class ToolUseEvent(StreamEvent):
-    """Tool invocation detected during streaming."""
+    """Request to execute a tool."""
 
     tool_name: str = ""
-    # Main doesn't have arguments or call_id here, reverting to minimal
+    tool_id: str | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolResultEvent(StreamEvent):
-    """Tool execution result detected during streaming."""
+    """Output from a tool execution."""
 
     tool_id: str | None = None
     status: str = ""
@@ -61,26 +64,28 @@ class ToolResultEvent(StreamEvent):
 
 
 class ThinkingEvent(StreamEvent):
-    """Extended thinking/reasoning block."""
+    """Internal reasoning or chain-of-thought content."""
 
     text: str = ""
 
 
 class SystemStatusEvent(StreamEvent):
-    """System status update (e.g. ``compacting``)."""
+    """Transient system state updates (e.g. 'compacting')."""
 
     status: str | None = None
 
 
 class CompactBoundaryEvent(StreamEvent):
-    """Marks a context compaction boundary."""
+    """Marker for context compaction events."""
 
     trigger: str = ""
     pre_tokens: int = 0
 
 
 def parse_stream_line(line: str) -> list[StreamEvent]:
-    """Parse a single NDJSON line into normalized stream events."""
+    """Parse a single NDJSON line into normalized stream events.
+    Supports both nested (block-based) and flat (role-based) formats.
+    """
     stripped = line.strip()
     if not stripped:
         return []
@@ -91,51 +96,27 @@ def parse_stream_line(line: str) -> list[StreamEvent]:
         logger.debug("Unparseable stream line: %.200s", stripped)
         return []
 
-    event_type = data.get("type", "")
+    etype = data.get("type", "")
 
-    if event_type == "result":
-        logger.debug("Stream event parsed type=%s", event_type)
-        stats = data.get("stats", {})
-        usage = data.get("usage") or {
-            "input_tokens": stats.get("input_tokens", 0),
-            "output_tokens": stats.get("output_tokens", 0),
-        }
-        
-        # Safely extract result or error message (for Gemini)
-        res = data.get("result") or data.get("response") or data.get("output")
-        if not res:
-            err = data.get("error")
-            if err:
-                res = err.get("message") if isinstance(err, dict) else str(err)
-        
+    # 1. Result/Summary Events
+    if etype == "result":
+        return [_parse_result_event(data)]
+
+    # 2. Assistant/Message Events (The heart of the stream)
+    if etype in ("assistant", "message"):
+        return _parse_message_event(data)
+
+    # 3. Tool Events (Direct or Nested)
+    if etype == "tool_use":
         return [
-            ResultEvent(
-                type=event_type,
-                subtype=data.get("subtype"),
-                session_id=data.get("session_id"),
-                result=res or "",
-                is_error=data.get("is_error", False) or data.get("status") == "error",
-                duration_ms=data.get("duration_ms") or stats.get("duration_ms"),
-                duration_api_ms=data.get("duration_api_ms"),
-                total_cost_usd=data.get("total_cost_usd"),
-                usage=data.get("usage", {}),
-                model_usage=data.get("modelUsage", {}),
-                returncode=data.get("returncode"),
-                num_turns=data.get("num_turns"),
-            ),
+            ToolUseEvent(
+                type="assistant",
+                tool_name=data.get("tool_name", ""),
+                tool_id=data.get("tool_id"),
+                parameters=data.get("parameters", {}),
+            )
         ]
-
-    if event_type == "assistant":
-        return _parse_assistant_content(data)
-
-    if event_type == "tool_use":
-        # Keep tool_use parsing from main?
-        name = data.get("tool_name", "")
-        if name:
-            return [ToolUseEvent(type="assistant", tool_name=name)]
-        return []
-
-    if event_type == "tool_result":
+    if etype == "tool_result":
         return [
             ToolResultEvent(
                 type="tool_result",
@@ -145,34 +126,99 @@ def parse_stream_line(line: str) -> list[StreamEvent]:
             )
         ]
 
-    if event_type == "message":
-        # Gemini specific message event
-        # {"type":"message", "role":"assistant", "content":"..."}
-        role = data.get("role")
-        if role == "assistant":
-            return _parse_gemini_message_content(data)
-        return []
-
-    if event_type == "system":
-        logger.debug("Stream event parsed type=%s subtype=%s", event_type, data.get("subtype"))
-        return _parse_system_event(data)
-        
-    if event_type == "init":
-        # Gemini init: {"type":"init", "session_id":"...", "model":"..."}
-        return [
-            SystemInitEvent(
-                type="system",
-                subtype="init",
-                session_id=data.get("session_id"),
-            ),
-        ]
+    # 4. System/Meta Events
+    if etype in ("system", "init"):
+        return _parse_system_meta_event(data)
 
     return []
 
 
-def _parse_system_event(data: dict[str, Any]) -> list[StreamEvent]:
-    """Route system events by subtype."""
-    subtype = data.get("subtype", "")
+def _parse_result_event(data: dict[str, Any]) -> ResultEvent:
+    """Extract metrics and results from a summary event."""
+    stats = data.get("stats", {})
+    usage = data.get("usage") or {
+        "input_tokens": stats.get("input_tokens", 0),
+        "output_tokens": stats.get("output_tokens", 0),
+        "cached_tokens": stats.get("cached", 0),  # Capture precise cache stats
+    }
+
+    # Extract result content using fallback chain
+    res = data.get("result") or data.get("response") or data.get("output")
+    is_error = data.get("is_error", False) or data.get("status") == "error"
+
+    if not res and is_error:
+        err = data.get("error")
+        res = err.get("message") if isinstance(err, dict) else str(err)
+
+    return ResultEvent(
+        type="result",
+        subtype=data.get("subtype"),
+        session_id=data.get("session_id"),
+        result=res or "",
+        is_error=is_error,
+        duration_ms=data.get("duration_ms") or stats.get("duration_ms"),
+        duration_api_ms=data.get("duration_api_ms"),
+        total_cost_usd=data.get("total_cost_usd"),
+        usage=usage,
+        model_usage=data.get("modelUsage", {}),
+        returncode=data.get("returncode"),
+        num_turns=data.get("num_turns"),
+    )
+
+
+def _parse_message_event(data: dict[str, Any]) -> list[StreamEvent]:
+    """Unify nested block-based and flat string-based messages."""
+    events: list[StreamEvent] = []
+
+    # Case A: Nested structure (Claude style)
+    if "message" in data:
+        content = data["message"].get("content", [])
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            events.extend(_parse_content_block(block))
+        return events
+
+    # Case B: Flat structure (Gemini style)
+    role = data.get("role")
+    content = data.get("content")
+    if role == "assistant" and content:
+        if isinstance(content, str):
+            events.append(AssistantTextDelta(type="assistant", text=content))
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    events.extend(_parse_content_block(block))
+
+    return events
+
+
+def _parse_content_block(block: dict[str, Any]) -> list[StreamEvent]:
+    """Parse a single content block into a specific event."""
+    b_type = block.get("type", "")
+    if b_type == "text":
+        text = block.get("text", "")
+        if not text:
+            return []
+        return [AssistantTextDelta(type="assistant", text=text)]
+    if b_type == "tool_use":
+        return [
+            ToolUseEvent(
+                type="assistant",
+                tool_name=block.get("name", ""),
+                tool_id=block.get("id"),
+                parameters=block.get("input", {}),
+            )
+        ]
+    if b_type == "thinking":
+        return [ThinkingEvent(type="assistant", text=block.get("text", ""))]
+    return []
+
+
+def _parse_system_meta_event(data: dict[str, Any]) -> list[StreamEvent]:
+    """Route system metadata events (init, status, compaction)."""
+    etype = data.get("type")
+    subtype = data.get("subtype") or (etype if etype == "init" else "")
 
     if subtype == "init":
         return [
@@ -180,7 +226,7 @@ def _parse_system_event(data: dict[str, Any]) -> list[StreamEvent]:
                 type="system",
                 subtype="init",
                 session_id=data.get("session_id"),
-            ),
+            )
         ]
 
     if subtype == "status":
@@ -189,7 +235,7 @@ def _parse_system_event(data: dict[str, Any]) -> list[StreamEvent]:
                 type="system",
                 subtype="status",
                 status=data.get("status"),
-            ),
+            )
         ]
 
     if subtype == "compact_boundary":
@@ -200,60 +246,7 @@ def _parse_system_event(data: dict[str, Any]) -> list[StreamEvent]:
                 subtype="compact_boundary",
                 trigger=meta.get("trigger", ""),
                 pre_tokens=meta.get("pre_tokens", 0),
-            ),
-        ]
-
-    return []
-
-
-def _parse_assistant_content(data: dict[str, Any]) -> list[StreamEvent]:
-    """Extract all content blocks from an assistant message."""
-    message = data.get("message", {})
-    content = message.get("content", [])
-    events: list[StreamEvent] = []
-
-    for block in content:
-        if not isinstance(block, dict):
-            continue
-        block_type = block.get("type", "")
-
-        if block_type == "text":
-            text = block.get("text", "")
-            if text:
-                events.append(AssistantTextDelta(type="assistant", text=text))
-
-        elif block_type == "tool_use":
-            name = block.get("name", "")
-            if name:
-                events.append(ToolUseEvent(type="assistant", tool_name=name))
-
-        elif block_type == "thinking":
-            events.append(
-                ThinkingEvent(type="assistant", text=block.get("text", "")),
             )
-
-    return events
-
-
-def _parse_gemini_message_content(data: dict[str, Any]) -> list[StreamEvent]:
-    """Parse Gemini message content which can be a string or blocks."""
-    content = data.get("content")
-    if not content:
-        return []
-
-    if isinstance(content, str):
-        return [AssistantTextDelta(type="assistant", text=content)]
-
-    if isinstance(content, list):
-        events: list[StreamEvent] = []
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            b_type = block.get("type")
-            if b_type == "text":
-                events.append(AssistantTextDelta(type="assistant", text=block.get("text", "")))
-            elif b_type == "tool_use":
-                events.append(ToolUseEvent(type="assistant", tool_name=block.get("name", "")))
-        return events
+        ]
 
     return []
