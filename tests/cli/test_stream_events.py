@@ -138,51 +138,6 @@ def test_result_event_defaults() -> None:
     assert event.session_id is None
 
 
-def test_parse_flat_gemini_message() -> None:
-    # Flat format (Gemini)
-    data = {"type": "message", "role": "assistant", "content": "Hello Gemini"}
-    events = parse_stream_line(json.dumps(data))
-    assert len(events) == 1
-    assert isinstance(events[0], AssistantTextDelta)
-    assert events[0].text == "Hello Gemini"
-
-
-def test_parse_flat_gemini_tool_use() -> None:
-    # Top-level tool_use (Gemini)
-    data = {
-        "type": "tool_use",
-        "tool_name": "bash",
-        "tool_id": "bash_1",
-        "parameters": {"cmd": "ls"},
-    }
-    events = parse_stream_line(json.dumps(data))
-    assert len(events) == 1
-    assert isinstance(events[0], ToolUseEvent)
-    assert events[0].tool_name == "bash"
-    assert events[0].tool_id == "bash_1"
-    assert events[0].parameters == {"cmd": "ls"}
-
-
-def test_parse_gemini_stats() -> None:
-    # Result with Gemini-specific stats structure
-    data = {
-        "type": "result",
-        "status": "success",
-        "stats": {
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "cached": 20,
-            "duration_ms": 1234,
-        },
-    }
-    events = parse_stream_line(json.dumps(data))
-    assert len(events) == 1
-    event = events[0]
-    assert isinstance(event, ResultEvent)
-    assert event.usage["cached_tokens"] == 20
-    assert event.duration_ms == 1234
-
-
 # -- StreamEvent base --
 
 

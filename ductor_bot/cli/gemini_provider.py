@@ -13,15 +13,16 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from ductor_bot.cli.base import BaseCLI, CLIConfig, docker_wrap
+from ductor_bot.cli.gemini_events import parse_gemini_stream_line
 from ductor_bot.cli.stream_events import (
     ResultEvent,
     StreamEvent,
     SystemInitEvent,
-    parse_stream_line,
 )
 from ductor_bot.cli.types import CLIResponse
 
 logger = logging.getLogger(__name__)
+
 
 _DEFAULT_TIMEOUT = 300.0
 
@@ -199,7 +200,7 @@ class GeminiCLI(BaseCLI):
 
                         logger.info("Gemini raw line: %s", line)
 
-                        for event in parse_stream_line(line):
+                        for event in parse_gemini_stream_line(line):
                             if isinstance(event, (ResultEvent, SystemInitEvent)):
                                 if event.session_id:
                                     last_session_id = event.session_id
