@@ -251,7 +251,6 @@ async def _build_model_step(
 
     # Use cache instead of live discovery
     codex_models = codex_cache.models if codex_cache else []
-
     if not codex_models:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -260,13 +259,13 @@ async def _build_model_step(
         )
         return f"{header}\n\nNo Codex models available.", keyboard
 
-    codex_rows: list[list[InlineKeyboardButton]] = [
+    rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text=m.display_name, callback_data=f"ms:m:{m.id}")]
         for m in codex_models
     ]
-    codex_rows.append([InlineKeyboardButton(text="<< Back", callback_data="ms:b:root")])
+    rows.append([InlineKeyboardButton(text="<< Back", callback_data="ms:b:root")])
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=codex_rows)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     return f"{header}\n\nSelect Codex model:", keyboard
 
 

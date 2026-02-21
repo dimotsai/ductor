@@ -1,5 +1,4 @@
 """NDJSON parser for the Google Gemini CLI.
-
 Translates Gemini-specific events into normalized StreamEvents.
 """
 
@@ -34,48 +33,52 @@ def parse_gemini_stream_line(line: str) -> list[StreamEvent]:
         return []
 
     etype = data.get("type", "")
-    events: list[StreamEvent] = []
 
     if etype == "init":
-        events.append(
+        return [
             SystemInitEvent(
                 type="system",
                 subtype="init",
                 session_id=data.get("session_id"),
             )
-        )
-    elif etype == "message":
-        events.extend(_parse_gemini_message(data))
-    elif etype == "tool_use":
-        events.append(
+        ]
+
+    if etype == "message":
+        return _parse_gemini_message(data)
+
+    if etype == "tool_use":
+        return [
             ToolUseEvent(
                 type="assistant",
                 tool_name=data.get("tool_name", ""),
                 tool_id=data.get("tool_id"),
                 parameters=data.get("parameters", {}),
             )
-        )
-    elif etype == "tool_result":
-        events.append(
+        ]
+
+    if etype == "tool_result":
+        return [
             ToolResultEvent(
                 type="tool_result",
                 tool_id=data.get("tool_id"),
                 status=data.get("status", ""),
                 output=data.get("output", ""),
             )
-        )
-    elif etype == "result":
-        events.append(_parse_gemini_result(data))
-    elif etype == "error":
-        events.append(
+        ]
+
+    if etype == "result":
+        return [_parse_gemini_result(data)]
+
+    if etype == "error":
+        return [
             ResultEvent(
                 type="result",
                 result=data.get("message", "Unknown Gemini error"),
                 is_error=True,
             )
-        )
+        ]
 
-    return events
+    return []
 
 
 def _parse_gemini_message(data: dict[str, Any]) -> list[StreamEvent]:

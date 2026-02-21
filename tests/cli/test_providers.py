@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from ductor_bot.cli.base import CLIConfig, docker_wrap
 from ductor_bot.cli.claude_provider import ClaudeCodeCLI
 from ductor_bot.cli.codex_provider import CodexCLI
-from ductor_bot.cli.gemini_provider import GeminiCLI
 
 if TYPE_CHECKING:
     import pytest

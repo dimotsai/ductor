@@ -167,8 +167,8 @@ class DockerManager:
         # container are owned by the host user, not root.
         # macOS and Windows Docker Desktop handle this transparently.
         if _needs_uid_mapping():
-            uid = os.getuid()  # type: ignore[attr-defined]
-            gid = os.getgid()  # type: ignore[attr-defined]
+            uid = os.getuid()
+            gid = os.getgid()
             cmd += ["--user", f"{uid}:{gid}"]
 
         # Auth directories -- mount only if they exist on the host.

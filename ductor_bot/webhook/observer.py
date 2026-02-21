@@ -364,7 +364,10 @@ class WebhookObserver:
             timed_out = False
             try:
                 async with asyncio.timeout(timeout):
-                    stdout, stderr = await proc.communicate(input=stdin_input)
+                    if exec_config.provider == "gemini":
+                        stdout, stderr = await proc.communicate(input=stdin_input)
+                    else:
+                        stdout, stderr = await proc.communicate()
             except TimeoutError:
                 timed_out = True
                 logger.warning("Webhook cron_task %s timed out after %.0fs", hook_id, timeout)
