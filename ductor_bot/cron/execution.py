@@ -89,10 +89,11 @@ def _find_gemini_cli_js() -> str | None:
     import subprocess
     from shutil import which
 
-    if which("npm"):
+    npm_path = which("npm")
+    if npm_path:
         try:
             root = subprocess.check_output(
-                ["npm", "root", "-g"], text=True, encoding="utf-8"
+                [npm_path, "root", "-g"], text=True, encoding="utf-8"
             ).strip()
             candidate = Path(root) / "@google" / "gemini-cli" / "dist" / "index.js"
             if candidate.is_file():
