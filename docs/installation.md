@@ -7,6 +7,7 @@
 3. At least one CLI installed and authenticated:
    - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code): `npm install -g @anthropic-ai/claude-code && claude auth`
    - [Codex CLI](https://github.com/openai/codex): `npm install -g @openai/codex && codex auth`
+   - [Gemini CLI](https://github.com/google-gemini/gemini-cli): `npm install -g @google/gemini-cli` (authentication is handled via browser on first run)
 4. A Telegram bot token from [@BotFather](https://t.me/BotFather)
 5. Your Telegram user ID from [@userinfobot](https://t.me/userinfobot)
 6. Docker (optional, but good to have for sandboxing)
@@ -104,9 +105,23 @@ pipx install ductor
 ductor
 ```
 
+### Windows (Native)
+
+ductor supports Native Windows, especially with the Google Gemini CLI. For Claude Code and Codex, WSL is still recommended for the best experience, but native execution is now possible.
+
+```powershell
+# Install Node.js (if not already installed)
+# Install Gemini CLI
+npm install -g @google/gemini-cli
+
+# Install ductor
+pip install ductor
+ductor
+```
+
 ### Windows (WSL)
 
-ductor runs on Windows through WSL. Native Windows won't work because the Claude Code and Codex CLIs need a Unix-like environment.
+WSL is also fully supported and recommended for Claude Code and Codex CLI.
 
 ```powershell
 # Install WSL (PowerShell as admin)
@@ -130,10 +145,6 @@ ductor
 ```
 
 > **Tip:** Docker Desktop for Windows can share its Docker engine with WSL. Enable "Use the WSL 2 based engine" in Docker Desktop settings.
-
-### Windows (native)
-
-Not supported. Use WSL.
 
 ---
 
@@ -347,6 +358,8 @@ Auth must be valid for at least one provider:
 claude auth
 # or
 codex auth
+# or
+gemini (run 'gemini' once to authenticate via browser)
 ```
 
 Then restart ductor.
@@ -392,4 +405,3 @@ pipx uninstall ductor
 
 # Optional: remove all data
 rm -rf ~/.ductor
-```

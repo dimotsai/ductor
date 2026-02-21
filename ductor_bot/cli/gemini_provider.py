@@ -67,16 +67,16 @@ class GeminiCLI(BaseCLI):
         except Exception:
             logger.warning("Failed to update Gemini trusted folders", exc_info=True)
 
-    @classmethod
     def _find_cli_js(cls) -> str | None:
         """Find the absolute path to the Gemini CLI's index.js via npm."""
         import subprocess
         from shutil import which
 
-        if which("npm"):
+        npm_path = which("npm")
+        if npm_path:
             try:
                 root = subprocess.check_output(
-                    ["npm", "root", "-g"], text=True, encoding="utf-8"
+                    [npm_path, "root", "-g"], text=True, encoding="utf-8"
                 ).strip()
                 candidate = Path(root) / "@google" / "gemini-cli" / "dist" / "index.js"
                 if candidate.is_file():
@@ -92,8 +92,9 @@ class GeminiCLI(BaseCLI):
         continue_session: bool = False,
         streaming: bool = False,
     ) -> list[str]:
+        from shutil import which
         cfg = self._config
-        cmd = ["node", self._cli_js] if self._cli_js else ["gemini"]
+        cmd = ["node", self._cli_js] if self._cli_js else [which("gemini") or "gemini"]
 
         # Aligned with Claude: stream-json for real-time events
         cmd += ["--output-format", "stream-json" if streaming else "json"]
@@ -258,6 +259,21 @@ class GeminiCLI(BaseCLI):
 
                 if tracked and reg:
                     reg.unregister(tracked)
+
+                if reg and reg.was_aborted(self._config.chat_id):
+                    yield ResultEvent(
+                        type="result",
+                        result="Process aborted by user.",
+                        is_error=True,
+                        session_id=last_session_id,
+                    )
+                elif process.returncode != 0:
+                    yield ResultEvent(
+                        type="result",
+                        result=f"Process exited with code {process.returncode}",
+                        is_error=True,
+                        session_id=last_session_id,
+                    )
 
 
 def _log_cmd(cmd: list[str], *, streaming: bool = False) -> None:
