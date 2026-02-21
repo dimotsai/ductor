@@ -45,7 +45,7 @@ def parse_claude_result(stdout: bytes) -> str:
         return ""
     try:
         data = json.loads(raw)
-        return str(data.get("result") or raw)
+        return str(data.get("result", ""))
     except json.JSONDecodeError:
         return raw[:2000]
 
