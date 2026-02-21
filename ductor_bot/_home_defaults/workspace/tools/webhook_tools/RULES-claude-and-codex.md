@@ -163,8 +163,8 @@ python3 tools/webhook_tools/webhook_edit.py "hook-id" --disable
 python3 tools/webhook_tools/webhook_edit.py "hook-id" --prompt-template "..."
 python3 tools/webhook_tools/webhook_edit.py "hook-id" --auth-mode "hmac"
 python3 tools/webhook_tools/webhook_edit.py "hook-id" --regenerate-token
-python3 tools/webhook_tools/webhook_edit.py "hook-id" --provider "gemini"
-python3 tools/webhook_tools/webhook_edit.py "hook-id" --model "flash"
+python3 tools/webhook_tools/webhook_edit.py "hook-id" --provider "codex"
+python3 tools/webhook_tools/webhook_edit.py "hook-id" --model "gpt-5.2-codex"
 python3 tools/webhook_tools/webhook_edit.py "hook-id" --reasoning-effort "high"
 python3 tools/webhook_tools/webhook_edit.py "hook-id" --cli-parameters '["--verbose"]'
 ```

@@ -112,8 +112,8 @@ python3 tools/cron_tools/cron_list.py
 ```bash
 python3 tools/cron_tools/cron_edit.py "exact-job-id" --schedule "30 8 * * *"
 python3 tools/cron_tools/cron_edit.py "exact-job-id" --timezone "Europe/Berlin"
-python3 tools/cron_tools/cron_edit.py "exact-job-id" --provider gemini
-python3 tools/cron_tools/cron_edit.py "exact-job-id" --model flash
+python3 tools/cron_tools/cron_edit.py "exact-job-id" --provider codex
+python3 tools/cron_tools/cron_edit.py "exact-job-id" --model gpt-5.3-codex
 python3 tools/cron_tools/cron_edit.py "exact-job-id" --reasoning-effort xhigh
 python3 tools/cron_tools/cron_edit.py "exact-job-id" --enable
 python3 tools/cron_tools/cron_edit.py "exact-job-id" --disable
