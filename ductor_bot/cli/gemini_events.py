@@ -81,22 +81,6 @@ def parse_gemini_stream_line(line: str) -> list[StreamEvent]:
     return []
 
 
-def parse_gemini_one_shot_result(stdout: bytes) -> str:
-    """Extract result text from Gemini CLI JSON output (one-shot)."""
-    if not stdout:
-        return ""
-    raw = stdout.decode(errors="replace").strip()
-    if not raw:
-        return ""
-    try:
-        data = json.loads(raw)
-        # Gemini specific result extraction: output -> response -> result
-        res = data.get("output") or data.get("response") or data.get("result")
-        return str(res or raw)
-    except json.JSONDecodeError:
-        return raw[:2000]
-
-
 def _parse_gemini_message(data: dict[str, Any]) -> list[StreamEvent]:
     """Parse Gemini's flat message structure."""
     role = data.get("role")
@@ -140,7 +124,7 @@ def _parse_gemini_result(data: dict[str, Any]) -> ResultEvent:
 
     # Gemini result can have status: error
     is_error = data.get("status") == "error"
-    res = data.get("response") or data.get("output") or data.get("result")
+    res = data.get("response") or data.get("content") or data.get("output")
     
     if not res and is_error:
         err = data.get("error")
