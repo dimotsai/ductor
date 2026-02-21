@@ -46,7 +46,7 @@ def _force_kill_process(pid: int) -> None:
     if _IS_WINDOWS:
         os.kill(pid, signal.SIGTERM)
     else:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, signal.SIGKILL)  # type: ignore[attr-defined]
 
 
 def _kill_and_wait(pid: int) -> None:

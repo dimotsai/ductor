@@ -206,7 +206,7 @@ def test_codex_build_command_with_images(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_gemini_build_command_basic(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda cls: "/app/index.js"
+        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda _: "/app/index.js"
     )
     cfg = CLIConfig(provider="gemini", model="gemini-3-pro")
     cli = GeminiCLI(cfg)
@@ -222,7 +222,7 @@ def test_gemini_build_command_basic(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_gemini_build_command_streaming(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda cls: "/app/index.js"
+        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda _: "/app/index.js"
     )
     cfg = CLIConfig(provider="gemini", model="gemini-3-pro")
     cli = GeminiCLI(cfg)
@@ -232,7 +232,7 @@ def test_gemini_build_command_streaming(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_gemini_build_command_with_resume(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda cls: "/app/index.js"
+        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda _: "/app/index.js"
     )
     cfg = CLIConfig(provider="gemini", model="gemini-3-pro")
     cli = GeminiCLI(cfg)
@@ -243,7 +243,7 @@ def test_gemini_build_command_with_resume(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_gemini_build_command_with_yolo(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda cls: "/app/index.js"
+        "ductor_bot.cli.gemini_provider.GeminiCLI._find_cli_js", lambda _: "/app/index.js"
     )
     cfg = CLIConfig(provider="gemini", permission_mode="bypassPermissions")
     cli = GeminiCLI(cfg)

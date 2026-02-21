@@ -8,9 +8,9 @@ from ductor_bot.cli.gemini_events import parse_gemini_stream_line
 from ductor_bot.cli.stream_events import (
     AssistantTextDelta,
     ResultEvent,
-    ToolUseEvent,
     SystemInitEvent,
     ToolResultEvent,
+    ToolUseEvent,
 )
 
 

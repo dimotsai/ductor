@@ -233,7 +233,7 @@ class CronObserver:
             task_overrides=task_overrides,
         )
 
-    async def _execute_job(  # noqa: PLR0915
+    async def _execute_job(  # noqa: C901, PLR0912, PLR0915
         self,
         job_id: str,
         instruction: str,
@@ -307,7 +307,11 @@ class CronObserver:
                 timeout,
             )
 
-            stdin_mode = asyncio.subprocess.PIPE if exec_config.provider == "gemini" else asyncio.subprocess.DEVNULL
+            stdin_mode = (
+                asyncio.subprocess.PIPE
+                if exec_config.provider == "gemini"
+                else asyncio.subprocess.DEVNULL
+            )
             stdin_input = enriched.encode() if exec_config.provider == "gemini" else None
 
             proc = await asyncio.create_subprocess_exec(

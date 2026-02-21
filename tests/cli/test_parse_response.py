@@ -6,8 +6,8 @@ import json
 from typing import Any
 
 from ductor_bot.cli.claude_provider import _parse_response as parse_claude
-from ductor_bot.cli.gemini_provider import _parse_response as parse_gemini
 from ductor_bot.cli.codex_events import parse_codex_jsonl
+from ductor_bot.cli.gemini_provider import _parse_response as parse_gemini
 
 # -- Claude _parse_response --
 

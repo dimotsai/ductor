@@ -1,4 +1,5 @@
 """NDJSON parser for the Google Gemini CLI.
+
 Translates Gemini-specific events into normalized StreamEvents.
 """
 
@@ -33,52 +34,48 @@ def parse_gemini_stream_line(line: str) -> list[StreamEvent]:
         return []
 
     etype = data.get("type", "")
+    events: list[StreamEvent] = []
 
     if etype == "init":
-        return [
+        events.append(
             SystemInitEvent(
                 type="system",
                 subtype="init",
                 session_id=data.get("session_id"),
             )
-        ]
-
-    if etype == "message":
-        return _parse_gemini_message(data)
-
-    if etype == "tool_use":
-        return [
+        )
+    elif etype == "message":
+        events.extend(_parse_gemini_message(data))
+    elif etype == "tool_use":
+        events.append(
             ToolUseEvent(
                 type="assistant",
                 tool_name=data.get("tool_name", ""),
                 tool_id=data.get("tool_id"),
                 parameters=data.get("parameters", {}),
             )
-        ]
-
-    if etype == "tool_result":
-        return [
+        )
+    elif etype == "tool_result":
+        events.append(
             ToolResultEvent(
                 type="tool_result",
                 tool_id=data.get("tool_id"),
                 status=data.get("status", ""),
                 output=data.get("output", ""),
             )
-        ]
-
-    if etype == "result":
-        return [_parse_gemini_result(data)]
-
-    if etype == "error":
-        return [
+        )
+    elif etype == "result":
+        events.append(_parse_gemini_result(data))
+    elif etype == "error":
+        events.append(
             ResultEvent(
                 type="result",
                 result=data.get("message", "Unknown Gemini error"),
                 is_error=True,
             )
-        ]
+        )
 
-    return []
+    return events
 
 
 def _parse_gemini_message(data: dict[str, Any]) -> list[StreamEvent]:
@@ -125,7 +122,7 @@ def _parse_gemini_result(data: dict[str, Any]) -> ResultEvent:
     # Gemini result can have status: error
     is_error = data.get("status") == "error"
     res = data.get("response") or data.get("content") or data.get("output")
-    
+
     if not res and is_error:
         err = data.get("error")
         res = err.get("message") if isinstance(err, dict) else str(err)

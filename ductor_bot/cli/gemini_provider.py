@@ -67,7 +67,7 @@ class GeminiCLI(BaseCLI):
         except Exception:
             logger.warning("Failed to update Gemini trusted folders", exc_info=True)
 
-    def _find_cli_js(cls) -> str | None:
+    def _find_cli_js(self) -> str | None:
         """Find the absolute path to the Gemini CLI's index.js via npm."""
         import subprocess
         from shutil import which
@@ -93,6 +93,7 @@ class GeminiCLI(BaseCLI):
         streaming: bool = False,
     ) -> list[str]:
         from shutil import which
+
         cfg = self._config
         cmd = ["node", self._cli_js] if self._cli_js else [which("gemini") or "gemini"]
 
@@ -172,7 +173,7 @@ class GeminiCLI(BaseCLI):
                 reg.unregister(tracked)
         return _parse_response(stdout, stderr, process.returncode)
 
-    async def send_streaming(
+    async def send_streaming(  # noqa: C901, PLR0912, PLR0915
         self,
         prompt: str,
         resume_session: str | None = None,
@@ -231,14 +232,16 @@ class GeminiCLI(BaseCLI):
                         logger.info("Gemini raw line: %s", line)
 
                         for event in parse_gemini_stream_line(line):
-                            if isinstance(event, (ResultEvent, SystemInitEvent)):
-                                if event.session_id:
-                                    last_session_id = event.session_id
-                            
+                            if (
+                                isinstance(event, (ResultEvent, SystemInitEvent))
+                                and event.session_id
+                            ):
+                                last_session_id = event.session_id
+
                             # Inject session_id if missing (critical for Gemini results)
                             if isinstance(event, ResultEvent) and not event.session_id:
                                 event.session_id = last_session_id
-                                
+
                             yield event
 
             except TimeoutError:

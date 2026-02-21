@@ -260,13 +260,13 @@ async def _build_model_step(
         )
         return f"{header}\n\nNo Codex models available.", keyboard
 
-    rows: list[list[InlineKeyboardButton]] = [
+    codex_rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text=m.display_name, callback_data=f"ms:m:{m.id}")]
         for m in codex_models
     ]
-    rows.append([InlineKeyboardButton(text="<< Back", callback_data="ms:b:root")])
+    codex_rows.append([InlineKeyboardButton(text="<< Back", callback_data="ms:b:root")])
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=codex_rows)
     return f"{header}\n\nSelect Codex model:", keyboard
 
 

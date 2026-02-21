@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 import os
-from shutil import which
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum, unique
 from pathlib import Path
+from shutil import which
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

@@ -259,7 +259,7 @@ class WebhookObserver:
             task_overrides=task_overrides,
         )
 
-    async def _dispatch_cron_task(
+    async def _dispatch_cron_task(  # noqa: C901
         self,
         hook_id: str,
         title: str,
@@ -346,7 +346,11 @@ class WebhookObserver:
                 indent(enriched, "    "),
             )
 
-            stdin_mode = asyncio.subprocess.PIPE if exec_config.provider == "gemini" else asyncio.subprocess.DEVNULL
+            stdin_mode = (
+                asyncio.subprocess.PIPE
+                if exec_config.provider == "gemini"
+                else asyncio.subprocess.DEVNULL
+            )
             stdin_input = enriched.encode() if exec_config.provider == "gemini" else None
 
             proc = await asyncio.create_subprocess_exec(
